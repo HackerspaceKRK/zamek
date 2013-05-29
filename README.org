@@ -1,3 +1,7 @@
 * Zamek
 
 Źródła modułu zapewniającego autoryzację i uwierzytelnienie do siedziby Hackerspace Kraków.
+
+** Użycie konwertera
+
+=echo "2F1D6E0002" | ruby converter.rb=

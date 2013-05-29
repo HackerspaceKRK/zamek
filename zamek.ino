@@ -42,24 +42,6 @@
 
 #define PIEZO 10
 
-/*
-
-**Ruby**
-def encode(karta)
-  result = karta.to_i(16).to_s(2)
-  while result.size < 40
-    result = "0" + result
-  end
-  result = result.reverse.to_i(2).to_s(16)
-  while result.size < 10
-    result = "0" + result
-  end
-  return result
-end
-print encode("2F1D6E0020")
-
-*/
-
 char card_00[] PROG_MEM = "1800100000";
 char card_01[] PROG_MEM = "1800100000";
 char card_02[] PROG_MEM = "1800100000";
