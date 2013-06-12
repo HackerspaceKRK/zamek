@@ -43,7 +43,7 @@ When using Arduino, connect:
 #define BUFSIZE 6+LENGTH
 #endif
 
-//pin on bottom left at Atmega8, the first one PWM-enabled
+//pin on bottom right at Atmega8, the first one PWM-enabled
 #define SERVO_PIN 9
 //pin above servo pin, the second one PWM-enabled
 #define PIEZO 10
