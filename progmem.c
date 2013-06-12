@@ -1,5 +1,5 @@
 char card_00[] PROG_MEM = "1800100000";
-asdasdchar card_01[] PROG_MEM = "1800100000";
+char card_01[] PROG_MEM = "1800100000";
 char card_02[] PROG_MEM = "1800100000";
 char card_03[] PROG_MEM = "1800100000";
 char card_04[] PROG_MEM = "1800100000";
