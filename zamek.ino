@@ -99,9 +99,10 @@ void setup() {
 void loop() {
 	//poor man's state machine!
 	if(servoDo){
-		servoDo = false;
 		//disable interrupts during rotation
 		detachInterrupts();
+
+		servoDo = false;
 	
 		servo.attach(9);
 		if(isOpened){
