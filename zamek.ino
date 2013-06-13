@@ -52,10 +52,12 @@ When using Arduino, connect:
 #define REED_INTERRUPT 0
 //pin D3
 #define SWITCH_INTERRUPT 1
+
 //workaround for PROGMEM bug in gcc-c++
 #define PROG_MEM __attribute__((section(".progmem.mydata"))) 
 
 #include "progmem.c"
+
 byte numOfCards = sizeof(cards)/sizeof(char*);
 
 char buffer[BUFSIZE];
@@ -64,20 +66,10 @@ char temp[LENGTH+1];
 byte pos = 0;
 Servo servo;
 
-//as we cannot use servo calls in methods attached to interrupts, so...
-volatile boolean servoDo = false;
 //equal to led's status
 volatile boolean isOpened = false;
 
-void attachInterrupts(){
-	attachInterrupt(REED_INTERRUPT, closeDoor,  FALLING);
-	attachInterrupt(SWITCH_INTERRUPT, toggleDoor, FALLING);
-}
 
-void detachInterrupts(){
-	detachInterrupt(REED_INTERRUPT);
-	detachInterrupt(SWITCH_INTERRUPT);
-}
 
 void setup() {
 	#ifdef PROD
@@ -90,34 +82,28 @@ void setup() {
 	//enable internal pull-ups
 	digitalWrite(2, HIGH); //INT0
 	digitalWrite(3, HIGH); //INT1
-	//attach interrupts
-	attachInterrupts();
 	//set mode output for led
 	pinMode(13, OUTPUT);
 }
 
-void loop() {
-	//poor man's state machine!
-	if(servoDo){
-		//disable interrupts during rotation
-		detachInterrupts();
 
-		servoDo = false;
-	
-		servo.attach(9);
-		if(isOpened){
-			//clockwise
-			servo.write(180);
-		}else{
-			//counter-clockwise
-			servo.write(0);
-		}
-		delay(2000);
-		servo.detach();
-	
-		//re-enable interrupts
-		attachInterrupts();
-	}
+volatile bool lastReedState = false;
+volatile bool lastSwitchState = true;
+
+void loop() {
+        if(lastSwitchState == false and !digitalRead(2)){
+          toggleDoor();
+          lastSwitchState=true;
+        }else if(lastSwitchState == true and digitalRead(2)){
+          lastSwitchState = false;
+        }
+        
+        if(lastReedState == true and !digitalRead(3)){
+          closeDoor();
+          lastReedState=false;
+        }else if(lastReedState == false and digitalRead(3)){
+          lastReedState=true;
+        }
 }
 
 #ifdef DEBUG
@@ -244,11 +230,25 @@ byte bufferIndex(byte index){
 	return index%(BUFSIZE);
 }
 
+
+void servoDo(){
+		servo.attach(9);
+		if(isOpened){
+			//clockwise
+			servo.write(180);
+		}else{
+			//counter-clockwise
+			servo.write(0);
+		}
+		delay(2000);
+		servo.detach();
+}
+
 void openDoor(){
 	if(isOpened == false){
 		digitalWrite(13, HIGH);
 		isOpened = true;
-		servoDo = true;
+                servoDo();
 	}
 }
 
@@ -257,7 +257,7 @@ void closeDoor(){
 		cleanBuffer();
 		digitalWrite(13, LOW);
 		isOpened = false;
-		servoDo = true;
+		servoDo();
 	}
 }
 
