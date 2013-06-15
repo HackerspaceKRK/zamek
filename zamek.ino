@@ -94,7 +94,7 @@ void loop() {
 		bool	button	= digitalRead(pinButtonSwitch);
 		bool	door	= digitalRead(pinReedSwitch);
 
-		if(previousButtonState == pressed and button == released and door == close)
+		if(previousButtonState == pressed and button == released and isDoorLocked)
 			unlockDoor();
 		previousButtonState=button;
 
