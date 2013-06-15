@@ -214,13 +214,13 @@ void servoDo(int angle){
 
 void unlockDoor(){
 	digitalWrite(pinLed, HIGH);
-    servoDo(counterClockwise);
+    servoDo(clockwise);
     isDoorLocked = false;
 }
 
 void lockDoor(){
 	cleanBuffer();
 	digitalWrite(pinLed, LOW);
-	servoDo(clockwise);
+	servoDo(counterClockwise);
 	isDoorLocked = true;
 }
