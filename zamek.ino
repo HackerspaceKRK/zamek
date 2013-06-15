@@ -15,9 +15,8 @@
 	limitations under the License.
 
 */
-#include <avr/pgmspace.h>
 #include <Servo.h> 
-
+#include "karty.h"
 
 /*
 When using Arduino, connect:
@@ -28,51 +27,46 @@ When using Arduino, connect:
 - D10:	piezo/speaker; second side to ground
 */
 
-
 //RFID card number length in ASCII-encoded hexes
 #define LENGTH 10
 
-#define PROD
-#define DEBUG
+#define STASZEK_MODE
+//#define DEBUG
 
-#ifdef PROD
-//format: CardNumberCardNumber
-#define BUFSIZE 2*LENGTH
+#ifdef STASZEK_MODE
+	//format: CardNumberCardNumber
+	#define BUFSIZE 2*LENGTH
 #else
-//format: SN CardNumber\n
-#define BUFSIZE 6+LENGTH
+	//format: SN CardNumber\n
+	#define BUFSIZE 6+LENGTH
 #endif
 
 //pin on bottom right at Atmega8, the first one PWM-enabled
-#define SERVO_PIN 9
+const int pinServo = 9;
 //pin above servo pin, the second one PWM-enabled
-#define PIEZO 10
+const int pinPiezo = 10;
+const int pinLed = 13;
 
-//pin D2 
-#define REED_INTERRUPT 0
-//pin D3
-#define SWITCH_INTERRUPT 1
+const int pinButtonSwitch = 2;
+const int pinReedSwitch = 3;
 
-//workaround for PROGMEM bug in gcc-c++
-#define PROG_MEM __attribute__((section(".progmem.mydata"))) 
+const int toneAccepted = 2000; //Hz
+const int toneRejected = 100;  //Hz
+const int toneDuration = 100;  //microseconds
 
-#include "progmem.c"
+const int lockTransitionTime = 2000; // in microseconds
 
-byte numOfCards = sizeof(cards)/sizeof(char*);
+bool isDoorLocked = true; //assumed state of door lock on uC power on
 
-char buffer[BUFSIZE];
-char card[LENGTH];
-char temp[LENGTH+1];
-byte pos = 0;
+// The config ends here. Also, here be dragons.
+
+char buffer[BUFSIZE] = {0};
+char card[LENGTH+1] = {0};
+char temp[LENGTH+1] = {0};
 Servo servo;
 
-//equal to led's status
-volatile boolean isOpened = false;
-
-
-
 void setup() {
-	#ifdef PROD
+	#ifdef STASZEK_MODE
 		//RFID reader we are actualy using, implemented according to the UNIQUE standard
 		Serial.begin(57600);
 	#else
@@ -80,190 +74,153 @@ void setup() {
 		Serial.begin(9600);
 	#endif
 	//enable internal pull-ups
-	digitalWrite(2, HIGH); //INT0
-	digitalWrite(3, HIGH); //INT1
+	digitalWrite(pinButtonSwitch, HIGH);
+	digitalWrite(pinReedSwitch, HIGH);
 	//set mode output for led
-	pinMode(13, OUTPUT);
+	pinMode(pinLed, OUTPUT);
 }
 
 
-volatile bool lastReedState = false;
-volatile bool lastSwitchState = true;
+bool previousDoorState = false;
+bool previousButtonState = true;
+
+const bool open = true;
+const bool close = false;
+
+const bool pressed = false;
+const bool released = true;
 
 void loop() {
-        if(lastSwitchState == false and !digitalRead(2)){
-          toggleDoor();
-          lastSwitchState=true;
-        }else if(lastSwitchState == true and digitalRead(2)){
-          lastSwitchState = false;
-        }
-        
-        if(lastReedState == true and !digitalRead(3)){
-          closeDoor();
-          lastReedState=false;
-        }else if(lastReedState == false and digitalRead(3)){
-          lastReedState=true;
-        }
+		bool	button	= digitalRead(pinButtonSwitch);
+		bool	door	= digitalRead(pinReedSwitch);
+
+		if(previousButtonState == pressed and button == released and door == close)
+			unlockDoor();
+		previousButtonState=button;
+
+        if(previousDoorState == open and door == close)
+			lockDoor();
+		previousDoorState=door;
+
 }
 
 #ifdef DEBUG
-void dump(){
-	for(int i = 1; i <= BUFSIZE; i++)
-	Serial.print(buffer[bufferIndex(pos+i)]);
-	Serial.print("\n");
-}
+	void dump(){
+		for(int i = 1; i <= BUFSIZE; ++i)
+			Serial.print(buffer[bufferIndex(cyclicBufferPosition+i)]);
+		Serial.print("\n");
+	}
 #endif
 
-//called by Arduino framework when there are available bytes in input buffer
-void serialEvent(){
-	while (Serial.available()) {
-		buffer[pos] = Serial.read();
-		#ifdef DEBUG
-			dump();
-		#endif
-		if(!isOpened && isBufferValid()){
-			#ifdef DEBUG
-			Serial.print("VALID\n");
-			#endif
-			copyFromBuffer();
-			if(isCardValid()){
-			 openDoor();
-			 cleanBuffer();
-			 return;
-			}
-		}
-		#ifdef DEBUG
-		else if(isOpened){
-			Serial.print("opened\n");
-		}else{
-			Serial.print("invalid\n");
-		}
-		#endif
-		pos = bufferIndex(pos + 1);
+void skipSerialBuffer(){
+	while(Serial.available()){
+		Serial.read();
+	}
+}
+ void processCardNumber(){
+	#ifdef DEBUG
+		Serial.print("VALID\n");
+	#endif
+	if(isCardAuthorized()){
+		unlockDoor();
+		cleanBuffer();
+		return;
 	}
 }
 
-
-void cleanBuffer(){
-	pos = 0;
-	for(byte i = 0; i < BUFSIZE; i++)
-		buffer[i]=0; 
-}
-
-
-#ifdef PROD
-boolean isBufferValid(){
-	for(byte i = 1; i <= LENGTH; i++){
-		if(buffer[bufferIndex(pos + i)] != buffer[bufferIndex(pos + i + LENGTH)])
-			return false;
-	}
-	return true;
-}
-#else
-boolean isBufferValid(){
-	if(buffer[bufferIndex(pos+1)] == '0' && buffer[bufferIndex(pos+2)] == 'x')
-		return true;
-	else
-		return false;
-}
-#endif
-
-
-#ifdef PROD
-void copyFromBuffer(){
-	Serial.write("Copy from buffer:");
-	for(byte i = 0; i < LENGTH; i++){
-		card[i] = buffer[bufferIndex(pos + i + 1)];
-		Serial.write(card[i]);
-	}
-	Serial.write(";\n");
-}
-#else
-void copyFromBuffer(){
-	Serial.write("Copy from buffer:");
-	for(byte i = 0; i < LENGTH; i++){
-		card[i] = buffer[bufferIndex(pos + i + 3)];
-		Serial.write(card[i]);
-	}
-	Serial.write(";\n");
-}
-#endif
-
-boolean isCardValid(){
-	for(byte i = 0; i < numOfCards; i++){
-	if(verifyCard(i)){
-	 tone(PIEZO, 2000, 100);
-	 return true; 
-	}
-	}
-	tone(PIEZO, 100, 100);
-	return false;
-}
-
-char charToUpper(const char c){
-	if ( c >= 'a' and c <= 'z'){
-		return c - ('a'-'A');
-	}else{
-		return c;
-	}  
-}
-
-/*
-//better, but unfortunately - buggy
-boolean verifyCard(byte i){
-	if(memcmp_P(card, (cards[i]), LENGTH) == 0)
-		return true;
-	return false;
-}
-*/
-boolean verifyCard(byte i){
-	//copy number from progmem
-	strcpy_P(temp, (char*)pgm_read_word(&(cards[i])));
-	for(int i = 0; i < LENGTH; i++){
-		if(temp[i] != charToUpper(card[i]))
-			return false;
-	}
-	return true;
-}
-
-byte bufferIndex(byte index){
+inline int bufferIndex(int index){
 	return index%(BUFSIZE);
 }
 
+int cyclicBufferPosition = 0;
+//called by Arduino framework when there are available bytes in input buffer
+void serialEvent(){
+	while (Serial.available()) {
+		buffer[cyclicBufferPosition] = Serial.read();
+		cyclicBufferPosition = bufferIndex(cyclicBufferPosition + 1);
+		if(isDoorLocked and isBufferValid(cyclicBufferPosition)){
+			copyFromBuffer(cyclicBufferPosition);
+			dumpCardToSerial();
+			processCardNumber();
+		}	
+	}
+}
 
-void servoDo(){
-		servo.attach(9);
-		if(isOpened){
-			//clockwise
-			servo.write(180);
-		}else{
-			//counter-clockwise
-			servo.write(0);
+inline void cleanBuffer(){
+	cyclicBufferPosition = 0;
+    memset(buffer, 0, BUFSIZE);
+}
+
+#ifdef STASZEK_MODE
+	const int offset = 3;
+#else
+	const int offset = 1;
+#endif
+inline void copyFromBuffer(int cyclicBufferPosition){
+	for(int i = 0; i < LENGTH; ++i)
+		card[i] = buffer[bufferIndex(cyclicBufferPosition + i + offset)];
+}
+
+#ifdef STASZEK_MODE
+	inline bool isBufferValid(int cyclicBufferPosition){
+		for(byte i = 1; i <= LENGTH; ++i){
+			if(buffer[bufferIndex(cyclicBufferPosition + i)] != buffer[bufferIndex(cyclicBufferPosition + i + LENGTH)])
+				return false;
 		}
-		delay(2000);
-		servo.detach();
-}
-
-void openDoor(){
-	if(isOpened == false){
-		digitalWrite(13, HIGH);
-		isOpened = true;
-                servoDo();
+		return true;
 	}
-}
-
-void closeDoor(){
-	if(isOpened == true){
-		cleanBuffer();
-		digitalWrite(13, LOW);
-		isOpened = false;
-		servoDo();
+#else
+	inline bool isBufferValid(int cyclicBufferPosition){
+		if(buffer[bufferIndex(cyclicBufferPosition+1)] == '0' && buffer[bufferIndex(cyclicBufferPosition+2)] == 'x')
+			return true;
+		else
+			return false;
 	}
+#endif
+
+inline void dumpCardToSerial(){
+	Serial.write("Copy from buffer: ");
+	for (int i = 0; i < LENGTH; ++i)
+		Serial.write(card[i]);
+	Serial.write(";\n");
 }
 
-void toggleDoor(){
-	if(isOpened == true)
-		closeDoor();
-	else
-		openDoor();
+inline bool isCardAuthorized(){
+	for(int i = 0; i < numOfCards; ++i){
+        	if(compareToAuthorizedCard(i)){
+	        	tone(pinPiezo, toneAccepted, toneDuration);
+	        	return true; 
+        	}
+	}
+	tone(pinPiezo, toneRejected, toneDuration);
+	return false;
+}
+
+inline bool compareToAuthorizedCard(int i){
+	//copy number from progmem
+	strcpy_P(temp, (char*)pgm_read_word(&(cards[i])));
+	return strcmp(temp, card) == 0;
+}
+
+const int counterClockwise = 0;
+const int clockwise = 180;
+
+void servoDo(int angle){
+	servo.attach(pinServo);
+	servo.write(angle);
+	delay(lockTransitionTime);
+	servo.detach();
+}
+
+void unlockDoor(){
+	digitalWrite(pinLed, HIGH);
+    servoDo(counterClockwise);
+    isDoorLocked = false;
+}
+
+void lockDoor(){
+	cleanBuffer();
+	digitalWrite(pinLed, LOW);
+	servoDo(clockwise);
+	isDoorLocked = true;
 }

@@ -1,0 +1,22 @@
+#include <avr/pgmspace.h>
+
+//workaround for PROGMEM bug in gcc-c++
+#define PROG_MEM __attribute__((section(".progmem.mydata"))) 
+
+char card_00[] PROG_MEM = "0000001100";
+char card_01] PROG_MEM = "0000001100";
+char card_02[] PROG_MEM = "0000001100";
+char card_03[] PROG_MEM = "0000001100";
+char card_04[] PROG_MEM = "0000001100";
+char card_05[] PROG_MEM = "0000001100";
+
+PROG_MEM const char *cards[] = {
+	card_00,
+	card_01,
+	card_02,
+	card_03,
+	card_04,
+	card_05,
+};
+
+byte numOfCards = sizeof(cards)/sizeof(char*);
