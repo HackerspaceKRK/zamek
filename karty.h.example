@@ -4,7 +4,7 @@
 #define PROG_MEM __attribute__((section(".progmem.mydata"))) 
 
 char card_00[] PROG_MEM = "0000001100";
-char card_01] PROG_MEM = "0000001100";
+char card_01[] PROG_MEM = "0000001100";
 char card_02[] PROG_MEM = "0000001100";
 char card_03[] PROG_MEM = "0000001100";
 char card_04[] PROG_MEM = "0000001100";
