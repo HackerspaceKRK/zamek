@@ -29,7 +29,6 @@ When using Arduino, connect:
 */
 
 //RFID card number length in ASCII-encoded hexes
-//#define LENGTH 10
 const int length = 10;
 
 #define STASZEK_MODE
@@ -37,11 +36,9 @@ const int length = 10;
 
 #ifdef STASZEK_MODE
 	//format: CardNumberCardNumber
-	//#define BUFSIZE 2*LENGTH
 	const int bufsize = 2*length;
 #else
 	//format: SN CardNumber\n
-	//#define BUFSIZE 6+LENGTH
 	const int bufsize = 6+length;
 #endif
 
