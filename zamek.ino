@@ -17,6 +17,7 @@
 */
 #include <Servo.h> 
 #include "karty.h"
+#include "buffer.hpp"
 
 /*
 When using Arduino, connect:
@@ -28,17 +29,20 @@ When using Arduino, connect:
 */
 
 //RFID card number length in ASCII-encoded hexes
-#define LENGTH 10
+//#define LENGTH 10
+const int length = 10;
 
 #define STASZEK_MODE
 //#define DEBUG
 
 #ifdef STASZEK_MODE
 	//format: CardNumberCardNumber
-	#define BUFSIZE 2*LENGTH
+	//#define BUFSIZE 2*LENGTH
+	const int bufsize = 2*length;
 #else
 	//format: SN CardNumber\n
-	#define BUFSIZE 6+LENGTH
+	//#define BUFSIZE 6+LENGTH
+	const int bufsize = 6+length;
 #endif
 
 //pin on bottom right at Atmega8, the first one PWM-enabled
@@ -60,9 +64,10 @@ bool isDoorLocked = true; //assumed state of door lock on uC power on
 
 // The config ends here. Also, here be dragons.
 
-char buffer[BUFSIZE] = {0};
-char card[LENGTH+1] = {0};
-char temp[LENGTH+1] = {0};
+CyclicBuffer<bufsize> buffer;
+
+char card[length+1] = {0};
+char temp[length+1] = {0};
 Servo servo;
 
 void setup() {
@@ -90,6 +95,7 @@ const bool close = false;
 const bool pressed = false;
 const bool released = true;
 
+
 void loop() {
 		bool	button	= digitalRead(pinButtonSwitch);
 		bool	door	= digitalRead(pinReedSwitch);
@@ -106,8 +112,8 @@ void loop() {
 
 #ifdef DEBUG
 	void dump(){
-		for(int i = 1; i <= BUFSIZE; ++i)
-			Serial.print(buffer[bufferIndex(cyclicBufferPosition+i)]);
+		for(int i = 1; i <= bufsize; ++i)
+			Serial.print(buffer[i]);
 		Serial.print("\n");
 	}
 #endif
@@ -128,50 +134,35 @@ void skipSerialBuffer(){
 	}
 }
 
-inline int bufferIndex(int index){
-	return index%(BUFSIZE);
-}
+#ifdef STASZEK_MODE
+	const int offset = 3;
+#else
+	const int offset = 1;
+#endif
 
-int cyclicBufferPosition = 0;
 //called by Arduino framework when there are available bytes in input buffer
 void serialEvent(){
 	while (Serial.available()) {
-		buffer[cyclicBufferPosition] = Serial.read();
-		cyclicBufferPosition = bufferIndex(cyclicBufferPosition + 1);
-		if(isDoorLocked and isBufferValid(cyclicBufferPosition)){
-			copyFromBuffer(cyclicBufferPosition);
+		buffer.put(Serial.read());
+		if(isDoorLocked and isBufferValid()){
+			buffer.copy(card,length,offset);
 			dumpCardToSerial();
 			processCardNumber();
 		}	
 	}
 }
 
-inline void cleanBuffer(){
-	cyclicBufferPosition = 0;
-    memset(buffer, 0, BUFSIZE);
-}
-
-#ifdef STASZEK_MODE
-	const int offset = 3;
-#else
-	const int offset = 1;
-#endif
-inline void copyFromBuffer(int cyclicBufferPosition){
-	for(int i = 0; i < LENGTH; ++i)
-		card[i] = buffer[bufferIndex(cyclicBufferPosition + i + offset)];
-}
-
 #ifdef STASZEK_MODE
 	inline bool isBufferValid(int cyclicBufferPosition){
-		for(byte i = 1; i <= LENGTH; ++i){
-			if(buffer[bufferIndex(cyclicBufferPosition + i)] != buffer[bufferIndex(cyclicBufferPosition + i + LENGTH)])
+		for(int i = 1; i <= length; ++i){
+			if(buffer[i] != buffer[i + length])
 				return false;
 		}
 		return true;
 	}
 #else
 	inline bool isBufferValid(int cyclicBufferPosition){
-		if(buffer[bufferIndex(cyclicBufferPosition+1)] == '0' && buffer[bufferIndex(cyclicBufferPosition+2)] == 'x')
+		if(buffer[1] == '0' && buffer[2] == 'x')
 			return true;
 		else
 			return false;
@@ -180,7 +171,7 @@ inline void copyFromBuffer(int cyclicBufferPosition){
 
 inline void dumpCardToSerial(){
 	Serial.write("Copy from buffer: ");
-	for (int i = 0; i < LENGTH; ++i)
+	for (int i = 0; i < length; ++i)
 		Serial.write(card[i]);
 	Serial.write(";\n");
 }
@@ -219,7 +210,7 @@ void unlockDoor(){
 }
 
 void lockDoor(){
-	cleanBuffer();
+    buffer.clear();
 	digitalWrite(pinLed, LOW);
 	servoDo(counterClockwise);
 	isDoorLocked = true;
