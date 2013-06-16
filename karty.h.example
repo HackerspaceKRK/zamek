@@ -19,4 +19,4 @@ PROG_MEM const char *cards[] = {
 	card_05,
 };
 
-byte numOfCards = sizeof(cards)/sizeof(char*);
+int numOfCards = sizeof(cards)/sizeof(char*);
