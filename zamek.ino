@@ -102,6 +102,8 @@ void loop() {
 			lockDoor();
 		previousDoorState=door;
 
+		if(door == open and isDoorLocked == true)
+			unlockDoor();
 }
 
 #ifdef DEBUG
