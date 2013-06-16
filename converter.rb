@@ -1,3 +1,4 @@
+#!/bin/env ruby
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2013 Łukasz Dubiel <bambucha14@gmail.com>
@@ -27,4 +28,8 @@ def encode(karta)
   return result
 end
 
-puts(encode(gets))
+if ARGV.size == 1
+  puts(encode(ARGV.first))
+else
+  puts(encode(gets))
+end
