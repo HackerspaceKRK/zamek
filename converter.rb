@@ -28,4 +28,8 @@ def encode(karta)
   return result
 end
 
-puts(encode(gets))
+if ARGV.size == 1
+  puts(encode(ARGV.first))
+else
+  puts(encode(gets))
+end
