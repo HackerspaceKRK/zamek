@@ -47,8 +47,8 @@ const int pinPiezo = 6;
 const int pinButtonSwitch = 2;
 const int pinReedSwitch = 3;
 
-const int toneAccepted = 2000; //Hz
-const int toneRejected = 100;  //Hz
+const int toneAccepted = 1260; //Hz
+const int toneRejected = 440;  //Hz
 const int toneDuration = 100;  //microseconds
 
 const int lockTransitionTime = 2000; // in microseconds
