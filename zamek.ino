@@ -123,6 +123,7 @@ void skipSerialBuffer(){
 	if(isCardAuthorized()){
 		unlockDoor();
 		cleanBuffer();
+		turnTheLightOn();
 		return;
 	}
 }
@@ -211,18 +212,21 @@ void servoDo(int angle){
 	servo.detach();
 }
 
-void unlockDoor(){
-    servoDo(clockwise);
-    isDoorLocked = false;
+void turnTheLightOn(){
     if (client.connect(server, 80)) {
       client.println("GET /api/v1/doorlock HTTP/1.1");
       client.println("Host: light.local");
       client.println("Connection: close");
       client.println();
       client.stop();
-    } 
+    }
 }
 
+void unlockDoor(){
+    servoDo(clockwise);
+    isDoorLocked = false;
+
+}
 void lockDoor(){
 	cleanBuffer();
 	servoDo(counterClockwise);
