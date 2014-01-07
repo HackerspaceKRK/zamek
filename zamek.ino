@@ -41,11 +41,8 @@ When using Arduino, connect:
 	#define BUFSIZE 6+LENGTH
 #endif
 
-//pin on bottom right at Atmega8, the first one PWM-enabled
-const int pinServo = 9;
-//pin above servo pin, the second one PWM-enabled
-const int pinPiezo = 10;
-const int pinLed = 13;
+const int pinServo = 5;
+const int pinPiezo = 6;
 
 const int pinButtonSwitch = 2;
 const int pinReedSwitch = 3;
@@ -76,8 +73,6 @@ void setup() {
 	//enable internal pull-ups
 	digitalWrite(pinButtonSwitch, HIGH);
 	digitalWrite(pinReedSwitch, HIGH);
-	//set mode output for led
-	pinMode(pinLed, OUTPUT);
 }
 
 
@@ -213,14 +208,12 @@ void servoDo(int angle){
 }
 
 void unlockDoor(){
-	digitalWrite(pinLed, HIGH);
     servoDo(clockwise);
     isDoorLocked = false;
 }
 
 void lockDoor(){
 	cleanBuffer();
-	digitalWrite(pinLed, LOW);
 	servoDo(counterClockwise);
 	isDoorLocked = true;
 }
