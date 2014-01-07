@@ -1,3 +1,4 @@
+#!/usr/bin/ruby
 # -*- coding: utf-8 -*-
 #
 #  Copyright 2013 Łukasz Dubiel <bambucha14@gmail.com>
