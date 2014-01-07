@@ -16,7 +16,10 @@
 
 */
 #include <Servo.h> 
+#include <SPI.h>
+#include <Ethernet.h>
 #include "karty.h"
+#include "ethernet.h"
 
 /*
 When using Arduino, connect:
@@ -73,6 +76,7 @@ void setup() {
 	//enable internal pull-ups
 	digitalWrite(pinButtonSwitch, HIGH);
 	digitalWrite(pinReedSwitch, HIGH);
+	Ethernet.begin(mac, ip);
 }
 
 
@@ -210,6 +214,13 @@ void servoDo(int angle){
 void unlockDoor(){
     servoDo(clockwise);
     isDoorLocked = false;
+    if (client.connect(server, 80)) {
+      client.println("GET /api/v1/doorlock HTTP/1.1");
+      client.println("Host: light.local");
+      client.println("Connection: close");
+      client.println();
+      client.stop();
+    } 
 }
 
 void lockDoor(){
