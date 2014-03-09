@@ -98,6 +98,17 @@ inline bool isStable(const int lastEvent){
 	return (millis() - lastEvent) > debounceDelay;
 }
 
+void lockDoor();
+void unlockDoor();
+bool isCardAuthorized();
+void cleanBuffer();
+void turnTheLightOn();
+bool isBufferValid(int cyclicBufferPosition);
+void copyFromBuffer(int cyclicBufferPosition);
+void dumpCardToSerial();
+bool compareToAuthorizedCard(int i);
+
+
 void loop() {
 		bool button = digitalRead(pinButtonSwitch);
 		if(button != previousButtonState){
