@@ -20,6 +20,7 @@
 #include <Ethernet.h>
 #include "karty.h"
 #include "ethernet.h"
+#include <avr/wdt.h>
 
 /*
 When using Arduino, connect:
@@ -66,6 +67,7 @@ char temp[LENGTH+1] = {0};
 Servo servo;
 
 void setup() {
+	wdt_enable(WDTO_4S);
 	#ifdef STASZEK_MODE
 		//RFID reader we are actualy using, implemented according to the UNIQUE standard
 		Serial.begin(57600);
@@ -101,6 +103,7 @@ void loop() {
 			lockDoor();
 		previousDoorState=door;
 
+		wdt_reset();
 }
 
 #ifdef DEBUG
