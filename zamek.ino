@@ -56,6 +56,8 @@ const int toneDuration = 100;  //microseconds
 
 const int lockTransitionTime = 2000; // in microseconds
 
+const int debounceDelay = 50; // miliseconds 
+
 bool isDoorLocked = true; //assumed state of door lock on uC power on
 
 // The config ends here. Also, here be dragons.
@@ -89,16 +91,33 @@ const bool close = false;
 const bool pressed = false;
 const bool released = true;
 
-void loop() {
-		bool	button	= digitalRead(pinButtonSwitch);
-		bool	door	= digitalRead(pinReedSwitch);
+int buttonEvent = 0;
+int doorEvent = 0;
 
-		if(previousButtonState == pressed and button == released and isDoorLocked)
-			unlockDoor();
+inline bool isStable(const int lastEvent){
+	return (millis() - lastEvent) > debounceDelay;
+}
+
+void loop() {
+		bool button = digitalRead(pinButtonSwitch);
+		if(button != previousButtonState){
+			buttonEvent = millis();
+		}
+		if(isStable(buttonEvent) and button == pressed){
+			if(isDoorLocked){
+				unlockDoor();
+			}
+		}
 		previousButtonState=button;
 
-        if(previousDoorState == open and door == close)
-			lockDoor();
+		bool door = digitalRead(pinReedSwitch);
+		if(door != previousDoorState){
+			doorEvent = millis();
+		}
+		if(isStable(doorEvent) and door == close){
+			if(!isDoorLocked)
+				lockDoor();
+		}
 		previousDoorState=door;
 
 }
