@@ -21,6 +21,7 @@
 #include "karty.h"
 #include "ethernet.h"
 #include <avr/wdt.h>
+#include <RestClient.h>
 
 /*
 When using Arduino, connect:
@@ -58,6 +59,7 @@ const int toneDuration = 100;  //microseconds
 const int lockTransitionTime = 2000; // in microseconds
 
 const int debounceDelay = 50; // miliseconds 
+const int remoteDelay = 2000;
 
 bool isDoorLocked = true; //assumed state of door lock on uC power on
 
@@ -104,12 +106,10 @@ void lockDoor();
 void unlockDoor();
 bool isCardAuthorized();
 void cleanBuffer();
-void turnTheLightOn();
+void reportOpened();
 bool isBufferValid(int cyclicBufferPosition);
 void copyFromBuffer(int cyclicBufferPosition);
 void dumpCardToSerial();
-bool compareToAuthorizedCard(int i);
-
 
 void loop() {
 		bool button = digitalRead(pinButtonSwitch);
@@ -124,13 +124,8 @@ void loop() {
 		previousButtonState=button;
 
 		bool door = digitalRead(pinReedSwitch);
-		if(door != previousDoorState){
-			doorEvent = millis();
-		}
-		if(isStable(doorEvent) and door == close){
-			if(!isDoorLocked)
-				lockDoor();
-		}
+		if(previousDoorState == open and door == close)
+                        lockDoor();
 		previousDoorState=door;
 
 		wdt_reset();
@@ -154,10 +149,13 @@ void skipSerialBuffer(){
 		Serial.print("VALID\n");
 	#endif
 	if(isCardAuthorized()){
+		tone(pinPiezo, toneAccepted, toneDuration);
 		unlockDoor();
 		cleanBuffer();
-		turnTheLightOn();
+		reportOpened();
 		return;
+	}else{
+		tone(pinPiezo, toneRejected, toneDuration);
 	}
 }
 
@@ -218,21 +216,50 @@ inline void dumpCardToSerial(){
 	Serial.write(";\n");
 }
 
-inline bool isCardAuthorized(){
-	for(int i = 0; i < numOfCards; ++i){
-        	if(compareToAuthorizedCard(i)){
-	        	tone(pinPiezo, toneAccepted, toneDuration);
-	        	return true; 
-        	}
-	}
-	tone(pinPiezo, toneRejected, toneDuration);
-	return false;
-}
 
-inline bool compareToAuthorizedCard(int i){
+inline bool compareToStoredCard(int i){
 	//copy number from progmem
 	strcpy_P(temp, (char*)pgm_read_word(&(cards[i])));
 	return strcmp(temp, card) == 0;
+}
+
+RestClient client = RestClient(server, 80);
+
+void reportOpened(){
+	char data[20];
+	sprintf(data, "card=%s", card);
+	client.put("/api/v1/opened", data);
+}
+
+int remoteEvent = 0;
+bool checkRemote(){
+        if((millis() - remoteEvent) < remoteDelay)
+          return false;
+	char data[20];
+	sprintf(data, "card=%s", card);
+	int retval = client.post("/api/v1/checkCard", data);
+        remoteEvent = millis();
+	if(retval == 200){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+bool checkLocal(){
+	for(int i = 0; i < numOfCards; ++i){
+        	if(compareToStoredCard(i)){
+	        	return true; 
+        	}
+	}
+	return false;
+}
+inline bool isCardAuthorized(){
+	if(checkLocal())
+		return true;
+	if(checkRemote())
+		return true;
+	return false;
 }
 
 const int counterClockwise = 0;
@@ -243,16 +270,6 @@ void servoDo(int angle){
 	servo.write(angle);
 	delay(lockTransitionTime);
 	servo.detach();
-}
-
-void turnTheLightOn(){
-    if (client.connect(server, 80)) {
-      client.println("GET /api/v1/doorlock HTTP/1.1");
-      client.println("Host: light.local");
-      client.println("Connection: close");
-      client.println();
-      client.stop();
-    }
 }
 
 void unlockDoor(){
