@@ -83,6 +83,9 @@ void setup() {
 	digitalWrite(pinButtonSwitch, HIGH);
 	digitalWrite(pinReedSwitch, HIGH);
 	Ethernet.begin(mac, ip);
+
+        pinMode(8, OUTPUT);
+        digitalWrite(8, LOW);
 }
 
 
@@ -98,6 +101,10 @@ const bool released = true;
 int buttonEvent = 0;
 int doorEvent = 0;
 
+int cyclicBufferPosition = 0;
+int lastSerialEventTime = 0;
+bool eventReceived = false;
+
 inline bool isStable(const int lastEvent){
 	return (millis() - lastEvent) > debounceDelay;
 }
@@ -111,7 +118,39 @@ bool isBufferValid(int cyclicBufferPosition);
 void copyFromBuffer(int cyclicBufferPosition);
 void dumpCardToSerial();
 
+
+unsigned int toneDisableTime;
+int toneEnabled = 0;
+
+int lastMs = 0;
+
 void loop() {
+
+		if(eventReceived and (millis() - lastSerialEventTime >= 20) ){
+			eventReceived = false;
+			cyclicBufferPosition = 0;
+			if(isDoorLocked)
+{
+				copyFromBuffer(cyclicBufferPosition);
+				dumpCardToSerial();
+				processCardNumber();
+			}
+		}
+
+if (millis() != lastMs)
+{
+  lastMs = millis();
+  if (toneDisableTime)
+  {
+    toneDisableTime--;
+  }
+  else
+  {
+    noTone(pinPiezo);
+  }
+}
+
+
 		bool button = digitalRead(pinButtonSwitch);
 		if(button != previousButtonState){
 			buttonEvent = millis();
@@ -139,7 +178,7 @@ void loop() {
 	}
 #endif
 
-void skipSerialBuffer(){
+void Buffer(){
 	while(Serial.available()){
 		Serial.read();
 	}
@@ -149,13 +188,17 @@ void skipSerialBuffer(){
 		Serial.print("VALID\n");
 	#endif
 	if(isCardAuthorized()){
-		tone(pinPiezo, toneAccepted, toneDuration);
-		unlockDoor();
-		cleanBuffer();
+		tone(pinPiezo, toneAccepted);
+                toneDisableTime = toneDuration;
+toneEnabled = 1;		
+unlockDoor();
+		//cleanBuffer();
 		reportOpened();
 		return;
 	}else{
-		tone(pinPiezo, toneRejected, toneDuration);
+		tone(pinPiezo, toneRejected);
+toneDisableTime = toneDuration;
+toneEnabled = 1;
 	}
 }
 
@@ -163,18 +206,22 @@ inline int bufferIndex(int index){
 	return index%(BUFSIZE);
 }
 
-int cyclicBufferPosition = 0;
 //called by Arduino framework when there are available bytes in input buffer
 void serialEvent(){
-	while (Serial.available()) {
-		buffer[cyclicBufferPosition] = Serial.read();
-		cyclicBufferPosition = bufferIndex(cyclicBufferPosition + 1);
-		if(isDoorLocked and isBufferValid(cyclicBufferPosition)){
-			copyFromBuffer(cyclicBufferPosition);
-			dumpCardToSerial();
-			processCardNumber();
-		}	
+        digitalWrite(8, HIGH);
+	while (Serial.available())
+        {
+                char temp = Serial.read();
+                if(cyclicBufferPosition < 10){
+		  buffer[cyclicBufferPosition++] = temp;
+                }else{
+                  Serial.flush();
+                }
+		
 	}
+	lastSerialEventTime = millis();
+        eventReceived = true;
+        digitalWrite(8, LOW);
 }
 
 inline void cleanBuffer(){
@@ -189,7 +236,7 @@ inline void cleanBuffer(){
 #endif
 inline void copyFromBuffer(int cyclicBufferPosition){
 	for(int i = 0; i < LENGTH; ++i)
-		card[i] = buffer[bufferIndex(cyclicBufferPosition + i + offset)];
+		card[i] = buffer[i + offset];
 }
 
 #ifdef STASZEK_MODE
@@ -233,8 +280,6 @@ void reportOpened(){
 
 int remoteEvent = 0;
 bool checkRemote(){
-        if((millis() - remoteEvent) < remoteDelay)
-          return false;
 	char data[20];
 	sprintf(data, "card=%s", card);
 	int retval = client.post("/api/v1/checkCard", data);
