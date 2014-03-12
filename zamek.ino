@@ -102,6 +102,8 @@ inline bool isStable(const int lastEvent){
 	return (millis() - lastEvent) > debounceDelay;
 }
 
+int delayTime = 0;
+
 void lockDoor();
 void unlockDoor();
 bool isCardAuthorized();
@@ -130,7 +132,13 @@ void loop() {
 			}
 		}
 
-if (millis() != lastMs)
+
+void authAccepted();
+void authRejected();
+
+
+EthernetUDP udp;
+void setup()
 {
   lastMs = millis();
   if (toneDisableTime)
@@ -144,30 +152,68 @@ if (millis() != lastMs)
 }
 
 
-		bool button = digitalRead(pinButtonSwitch);
-		if(button != previousButtonState){
-			buttonEvent = millis();
-		}
-		if(isStable(buttonEvent) and button == pressed){
-			if(isDoorLocked){
-				unlockDoor();
-			}
-		}
-		previousButtonState=button;
+#ifdef STASZEK_MODE
+	// RFID reader we are actualy using, implemented according to the UNIQUE standard
+	Serial.begin(57600);
+#else
+	// RFID reader bought from chinese guys; it is violating every single standard
+	Serial.begin(9600);
+#endif
+	// enable internal pull-ups
+	digitalWrite(pinButtonSwitch, HIGH);
+	digitalWrite(pinReedSwitch, HIGH);
 
-		bool door = digitalRead(pinReedSwitch);
-		if(previousDoorState == open and door == close)
-                        lockDoor();
-		previousDoorState=door;
+	Ethernet.begin(mac, ip);
+	udp.begin(10000);
 
-		wdt_reset();
+	pinMode(9, OUTPUT);
+	digitalWrite(9, LOW);
 }
 
-#ifdef DEBUG
-	void dump(){
-		for(int i = 1; i <= BUFSIZE; ++i)
-			Serial.print(buffer[bufferIndex(cyclicBufferPosition+i)]);
-		Serial.print("\n");
+void loop()
+{
+	readerProcess();
+
+  int packetSize = udp.parsePacket();
+  // if (udp.available())
+	if (packetSize)
+	{
+		if (packetSize == 3)
+		{
+			char msgBuf[3];
+			udp.read(msgBuf, 3);
+			if (strncmp(msgBuf, ">CO", 3) == 0)
+			{
+				authAccepted();
+			}
+			if (strncmp(msgBuf, ">CB", 3) == 0)
+			{
+				authRejected();
+			}
+		}
+		else
+		{
+			while (packetSize--)
+			{
+				udp.read();
+			}
+		}
+	}
+
+	static unsigned long lastMs = 0;
+	if (millis() != lastMs) // done every 1ms
+	{
+		lastMs = millis();
+
+		if (toneDisableTime)
+		{
+			toneDisableTime--;
+			if (toneDisableTime == 0)
+				noTone(pinPiezo);
+		}
+
+		if (delayTime)
+			delayTime--;
 	}
 #endif
 
@@ -217,26 +263,19 @@ void serialEvent(){
         digitalWrite(8, LOW);
 }
 
-inline void cleanBuffer(){
-	cyclicBufferPosition = 0;
-    memset(buffer, 0, BUFSIZE);
-}
+int lastNumberChk = 0;
 
-#ifdef STASZEK_MODE
-	const int offset = 0;
-#else
-	const int offset = 1;
+void onReaderNewCard()
+{
+
+	{
+		// dumpCardToSerial();
+#ifdef DEBUG
+		Serial.print("VALID\n");
 #endif
-inline void copyFromBuffer(int cyclicBufferPosition){
-	for(int i = 0; i < LENGTH; ++i)
-		card[i] = buffer[i + offset];
-}
-
-#ifdef STASZEK_MODE
-	inline bool isBufferValid(int cyclicBufferPosition){
-		for(byte i = 1; i <= LENGTH; ++i){
-			if(buffer[bufferIndex(cyclicBufferPosition + i)] != buffer[bufferIndex(cyclicBufferPosition + i + LENGTH)])
-				return false;
+		if (auth_checkLocal())
+		{
+			authAccepted();
 		}
 		return true;
 	}
@@ -245,7 +284,13 @@ inline void copyFromBuffer(int cyclicBufferPosition){
 		if(buffer[bufferIndex(cyclicBufferPosition+1)] == '0' && buffer[bufferIndex(cyclicBufferPosition+2)] == 'x')
 			return true;
 		else
-			return false;
+		{
+			udp.beginPacket(srvIp, 10000);
+			udp.write("@");
+			udp.write((const uint8_t*)readerCardNumber, LENGTH);
+			udp.write("\n");
+			udp.endPacket();
+		}
 	}
 #endif
 
@@ -256,54 +301,10 @@ inline void dumpCardToSerial(){
 	Serial.write(";\n");
 }
 
-
-inline bool compareToStoredCard(int i){
-	//copy number from progmem
-	strcpy_P(temp, (char*)pgm_read_word(&(cards[i])));
-	return strcmp(temp, card) == 0;
-}
-
-RestClient client = RestClient(server, 80);
-
-void reportOpened(){
-	char data[20];
-	sprintf(data, "card=%s", card);
-	client.put("/api/v1/opened", data);
-}
-
-int remoteEvent = 0;
-bool checkRemote(){
-	char data[20];
-	sprintf(data, "card=%s", card);
-	int retval = client.post("/api/v1/checkCard", data);
-        remoteEvent = millis();
-	if(retval == 200){
-		return true;
-	}else{
-		return false;
-	}
-}
-
-bool checkLocal(){
-	for(int i = 0; i < numOfCards; ++i){
-        	if(compareToStoredCard(i)){
-	        	return true; 
-        	}
-	}
-	return false;
-}
-inline bool isCardAuthorized(){
-	if(checkLocal())
-		return true;
-	if(checkRemote())
-		return true;
-	return false;
-}
-
-const int counterClockwise = 0;
-const int clockwise = 180;
-
-void servoDo(int angle){
+// doors
+void servoDo(int angle)
+{
+	// return;
 	servo.attach(pinServo);
 	servo.write(angle);
 	delay(lockTransitionTime);
@@ -319,4 +320,28 @@ void lockDoor(){
 	cleanBuffer();
 	servoDo(counterClockwise);
 	isDoorLocked = true;
+}
+
+void authAccepted()
+{
+	if (delayTime == 0)
+	{
+		tone(pinPiezo, toneAccepted);
+		toneDisableTime = toneDuration;
+		toneEnabled = 1;
+		delayTime = 500;
+	}
+	authReportOpened();
+	if (isDoorLocked)
+		unlockDoor();
+}
+void authRejected()
+{
+	if (delayTime == 0)
+	{
+		tone(pinPiezo, toneRejected);
+		toneDisableTime = toneDuration;
+		toneEnabled = 1;
+		delayTime = 500;
+	}
 }
