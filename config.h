@@ -10,13 +10,14 @@
 #define STASZEK_MODE
 //#define DEBUG
 
-const int toneAccepted = 1260; // in Hz
-const int toneRejected = 440;  // in Hz
+const int toneAccepted = 1260; //Hz
+const int toneRejected = 440;  //Hz
 const int toneDuration = 100;  // milliseconds 
 
 const int lockTransitionTime = 2000 - 300; // in milliseconds
 
-const unsigned int debounceDelay = 200; // milliseconds 
+const int debounceDelay = 50; // milliseconds 
+const int remoteDelay = 2000;
 
 const int servoLockAngle = 0;
 const int servoUnlockAngle = 180;

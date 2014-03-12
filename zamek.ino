@@ -104,6 +104,9 @@ inline bool isStable(const int lastEvent){
 
 int delayTime = 0;
 
+int lockTransitionTimeTimeout = 0;
+int udpResponseTimeout = 0;
+
 void lockDoor();
 void unlockDoor();
 bool isCardAuthorized();
@@ -182,13 +185,16 @@ void loop()
 		{
 			char msgBuf[3];
 			udp.read(msgBuf, 3);
-			if (strncmp(msgBuf, ">CO", 3) == 0)
+			if (udpResponseTimeout)
 			{
-				authAccepted();
-			}
-			if (strncmp(msgBuf, ">CB", 3) == 0)
-			{
-				authRejected();
+				if (strncmp(msgBuf, ">CO", 3) == 0)
+				{
+					authAccepted();
+				}
+				if (strncmp(msgBuf, ">CB", 3) == 0)
+				{
+					authRejected();
+				}
 			}
 		}
 		else
@@ -214,6 +220,18 @@ void loop()
 
 		if (delayTime)
 			delayTime--;
+
+		if (lockTransitionTimeTimeout)
+		{
+			lockTransitionTimeTimeout--;
+			if (lockTransitionTimeTimeout == 0)
+			{
+				servo.detach();
+			}
+		}
+
+		if (udpResponseTimeout)
+			udpResponseTimeout--;
 	}
 #endif
 
@@ -290,6 +308,7 @@ void onReaderNewCard()
 			udp.write((const uint8_t*)readerCardNumber, LENGTH);
 			udp.write("\n");
 			udp.endPacket();
+			udpResponseTimeout = 1000;
 		}
 	}
 #endif
@@ -307,8 +326,9 @@ void servoDo(int angle)
 	// return;
 	servo.attach(pinServo);
 	servo.write(angle);
-	delay(lockTransitionTime);
-	servo.detach();
+	lockTransitionTimeTimeout = lockTransitionTime;
+	// delay(lockTransitionTime);
+	// servo.detach();
 }
 
 void unlockDoor(){
