@@ -44,6 +44,8 @@ int doorEvent = 0;
 int toneDisableTime;
 int toneEnabled = 0;
 
+int delayTime = 0;
+
 void lockDoor();
 void unlockDoor();
 void dumpCardToSerial();
@@ -53,9 +55,16 @@ inline bool isStable(const int lastEvent)
 	return millis() - lastEvent > debounceDelay;
 }
 
+
+void authAccepted();
+void authRejected();
+
+
+EthernetUDP udp;
 void setup()
 {
 	wdt_enable(WDTO_4S);
+
 
 #ifdef STASZEK_MODE
 	// RFID reader we are actualy using, implemented according to the UNIQUE standard
@@ -69,17 +78,44 @@ void setup()
 	digitalWrite(pinReedSwitch, HIGH);
 
 	Ethernet.begin(mac, ip);
+	udp.begin(10000);
 
-	pinMode(8, OUTPUT);
-	digitalWrite(8, LOW);
+	pinMode(9, OUTPUT);
+	digitalWrite(9, LOW);
 }
 
 void loop()
 {
 	readerProcess();
 
-	static int lastMs = 0;
-	if (millis() != lastMs) // done every 1sm
+  int packetSize = udp.parsePacket();
+  // if (udp.available())
+	if (packetSize)
+	{
+		if (packetSize == 3)
+		{
+			char msgBuf[3];
+			udp.read(msgBuf, 3);
+			if (strncmp(msgBuf, ">CO", 3) == 0)
+			{
+				authAccepted();
+			}
+			if (strncmp(msgBuf, ">CB", 3) == 0)
+			{
+				authRejected();
+			}
+		}
+		else
+		{
+			while (packetSize--)
+			{
+				udp.read();
+			}
+		}
+	}
+
+	static unsigned long lastMs = 0;
+	if (millis() != lastMs) // done every 1ms
 	{
 		lastMs = millis();
 
@@ -89,6 +125,9 @@ void loop()
 			if (toneDisableTime == 0)
 				noTone(pinPiezo);
 		}
+
+		if (delayTime)
+			delayTime--;
 	}
 
 	bool button = digitalRead(pinButtonSwitch);
@@ -122,27 +161,28 @@ void dump()
 }
 #endif
 
+int lastNumberChk = 0;
+
 void onReaderNewCard()
 {
-	if (isDoorLocked)
+
 	{
 		// dumpCardToSerial();
-
 #ifdef DEBUG
 		Serial.print("VALID\n");
 #endif
-		if (authIsCardAuthorized())
+		if (auth_checkLocal())
 		{
-			tone(pinPiezo, toneAccepted);
-			authReportOpened();
-			unlockDoor();
+			authAccepted();
 		}
 		else
 		{
-			tone(pinPiezo, toneRejected);
+			udp.beginPacket(srvIp, 10000);
+			udp.write("@");
+			udp.write((const uint8_t*)readerCardNumber, LENGTH);
+			udp.write("\n");
+			udp.endPacket();
 		}
-		toneDisableTime = toneDuration;
-		toneEnabled = 1;
 	}
 }
 inline void dumpCardToSerial()
@@ -156,6 +196,7 @@ inline void dumpCardToSerial()
 // doors
 void servoDo(int angle)
 {
+	// return;
 	servo.attach(pinServo);
 	servo.write(angle);
 	delay(lockTransitionTime);
@@ -170,4 +211,28 @@ void lockDoor()
 {
 	servoDo(counterClockwise);
 	isDoorLocked = true;
+}
+
+void authAccepted()
+{
+	if (delayTime == 0)
+	{
+		tone(pinPiezo, toneAccepted);
+		toneDisableTime = toneDuration;
+		toneEnabled = 1;
+		delayTime = 500;
+	}
+	authReportOpened();
+	if (isDoorLocked)
+		unlockDoor();
+}
+void authRejected()
+{
+	if (delayTime == 0)
+	{
+		tone(pinPiezo, toneRejected);
+		toneDisableTime = toneDuration;
+		toneEnabled = 1;
+		delayTime = 500;
+	}
 }

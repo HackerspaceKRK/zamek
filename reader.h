@@ -13,7 +13,7 @@
 
 // private variables
 uint8_t reader_bufferIdx = 0;
-int reader_lastReceiveTime;
+unsigned long reader_lastReceiveTime;
 
 // public variables
 char readerCardNumber[BUFSIZE];
@@ -26,7 +26,7 @@ extern void onReaderNewCard();
 
 void readerProcess()
 {
-	if (reader_bufferIdx > 0 && millis() - reader_lastReceiveTime >= timeBetweenFrames * 2 / 5)
+	if (reader_bufferIdx > 0 && (millis() - reader_lastReceiveTime) >= timeBetweenFrames * 2 / 5)
 	{
 		reader_bufferIdx = 0;
 	}
@@ -35,20 +35,22 @@ void readerProcess()
 // private implementation
 void serialEvent()
 {
-	digitalWrite(8, HIGH);
 	while (Serial.available())
 	{
 		readerCardNumber[reader_bufferIdx++] = Serial.read();
 		if (reader_bufferIdx == LENGTH)
 		{
+			digitalWrite(9, HIGH);
+			Serial.end();
 			if (reader_isBufferValid())
 				onReaderNewCard();
+			Serial.begin(57600);
 			Serial.flush();
 			reader_bufferIdx = 0;
 		}
 	}
 	reader_lastReceiveTime = millis();
-	digitalWrite(8, LOW);
+	digitalWrite(9, LOW);
 }
 
 #ifdef STASZEK_MODE

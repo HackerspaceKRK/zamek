@@ -19,14 +19,21 @@ bool authIsCardAuthorized()
 }
 void authReportOpened()
 {
+	return;
 	char data[20];
 	sprintf(data, "card=%s", readerCardNumber);
 	auth_client.put("/api/v1/opened", data);
+
+	// udp.beginPacket(srvIp, 10000);
+	// udp.write("!OPEN");
+	// udp.write("\n");
+	// udp.endPacket();
 }
 
 // private implementation
 bool auth_checkRemote()
 {
+	return false;
 	char data[20];
 	sprintf(data, "card=%s", readerCardNumber);
 	int retval = auth_client.post("/api/v1/checkCard", data);
@@ -50,7 +57,17 @@ bool auth_checkLocal()
 bool auth_compareToStoredCard(int i)
 {
 	char* addr = (char*)pgm_read_word(cards + i);
-	return strcmp_P(addr, readerCardNumber) == 0;
+	// char card[LENGTH];
+	// strcpy_P(card, addr);
+
+	
+	// udp.beginPacket(srvIp, 10000);
+	// udp.write((const uint8_t*)readerCardNumber, LENGTH);
+	// udp.write("\n");
+	// udp.endPacket();
+
+	// return false;
+	return strncmp_P(readerCardNumber, addr, LENGTH) == 0;
 }
 
 #endif
