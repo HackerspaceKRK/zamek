@@ -9,11 +9,11 @@
 
 const int toneAccepted = 1260; //Hz
 const int toneRejected = 440;  //Hz
-const int toneDuration = 100;  //microseconds
+const int toneDuration = 100;  // milliseconds 
 
-const int lockTransitionTime = 2000; // in microseconds
+const int lockTransitionTime = 2000 - 300; // in milliseconds
 
-const int debounceDelay = 50; // miliseconds 
+const int debounceDelay = 50; // milliseconds 
 const int remoteDelay = 2000;
 
 const int counterClockwise = 0;
