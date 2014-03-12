@@ -23,14 +23,7 @@
 #include <avr/wdt.h>
 #include <RestClient.h>
 
-/*
-When using Arduino, connect:
-- RX0:	RFID reader TX
-- D2:	reed switch; second side to ground
-- D3:	microswitch; second side to ground
-- D9:	servo (the yellow cable...)
-- D10:	piezo/speaker; second side to ground
-*/
+#include "config.h"
 
 //RFID card number length in ASCII-encoded hexes
 #define LENGTH 10
