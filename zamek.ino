@@ -21,7 +21,6 @@ limitations under the License.
 #include <avr/wdt.h>
 #include <RestClient.h>
 
-#include "hardware.h"
 #include "config.h"
 
 #include "reader.h"
