@@ -29,7 +29,7 @@ const int timeBetweenFrames = 50;
 const uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xDD, 0xFE, 0xED };
 const char server[] = "192.168.100.5";
 const IPAddress ip(192,168,100,9);
-const IPAddress serverIp(192,168,100,5);
+const IPAddress srvIp(192,168,100,5);
 
 // HARDWARE
 
