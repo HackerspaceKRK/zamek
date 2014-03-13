@@ -21,7 +21,6 @@
 #include "karty.h"
 #include "ethernet.h"
 #include <avr/wdt.h>
-// #include <RestClient.h>
 
 #include "config.h"
 
@@ -54,39 +53,15 @@ const int lockTransitionTime = 2000; // in microseconds
 const int debounceDelay = 200; // miliseconds 
 const int remoteDelay = 2000;
 
-bool isDoorLocked = true; //assumed state of door lock on uC power on
-
-// The config ends here. Also, here be dragons.
-
-char buffer[BUFSIZE] = {0};
-char card[LENGTH+1] = {0};
-char temp[LENGTH+1] = {0};
 Servo servo;
-
-void setup() {
-	wdt_enable(WDTO_4S);
-	#ifdef STASZEK_MODE
-		//RFID reader we are actualy using, implemented according to the UNIQUE standard
-		Serial.begin(57600);
-	#else
-		//RFID reader bought from chinese guys; it is violating every single standard
-		Serial.begin(9600);
-	#endif
-	//enable internal pull-ups
-	digitalWrite(pinButtonSwitch, HIGH);
-	digitalWrite(pinReedSwitch, HIGH);
-	Ethernet.begin(mac, ip);
-
-        pinMode(8, OUTPUT);
-        digitalWrite(8, LOW);
-}
-
-
-bool previousDoorState = false;
-bool previousButtonState = true;
+EthernetUDP udp;
+bool isDoorLocked = true; //assumed state of door lock on uC power on
 
 const bool open = true;
 const bool close = false;
+
+bool previousDoorState = close;
+bool previousButtonState = true;
 
 const bool pressed = false;
 const bool released = true;
@@ -104,6 +79,7 @@ int udpResponseTimeout = 0;
 int lastCardChkTimeout = 0;
 uint8_t lastCardChk = 0;
 
+void playSong();
 void lockDoor();
 void unlockDoor();
 bool isCardAuthorized();
@@ -112,30 +88,9 @@ void reportOpened();
 bool isBufferValid(int cyclicBufferPosition);
 void copyFromBuffer(int cyclicBufferPosition);
 void dumpCardToSerial();
+void cardAccepted();
+void cardRejected();
 
-
-unsigned int toneDisableTime;
-int toneEnabled = 0;
-
-int lastMs = 0;
-
-void loop() {
-
-		if(eventReceived and (millis() - lastSerialEventTime >= 20) ){
-			eventReceived = false;
-			cyclicBufferPosition = 0;
-			if(isDoorLocked)
-{
-				copyFromBuffer(cyclicBufferPosition);
-				dumpCardToSerial();
-				processCardNumber();
-			}
-		}
-
-void authAccepted();
-void authRejected();
-
-EthernetUDP udp;
 void setup()
 {
 	wdt_enable(WDTO_2S);
@@ -157,76 +112,64 @@ void setup()
 	Ethernet.begin(mac, ip);
 	udp.begin(10000);
 
-#define NOTE_E (329)
-#define NOTE_F (349)
-#define NOTE_G (392)
-#define NOTE_D (293)
-#define NOTE_C (261)
-	int tones[] = {
-		NOTE_E,
-		NOTE_E,
-		NOTE_F,
-		NOTE_G,
-		NOTE_G,
-		NOTE_F,
-		NOTE_E,
-		NOTE_D,
-		NOTE_C,
-		NOTE_C,
-		NOTE_D,
-		NOTE_E,
-		NOTE_E,
-		NOTE_D,
-		NOTE_D,
-	};
+	// playing song in order to properly... boot the device
+	// we really need this time (about 7-10 secs)
+	playSong();
+
+	digitalWrite(9, HIGH);
+}
+
+void playSong()
+{
+#define NOTE_E 329
+#define NOTE_F 349
+#define NOTE_G 392
+#define NOTE_D 293
+#define NOTE_C 261
+	int tones[] = { NOTE_E, NOTE_E, NOTE_F, NOTE_G, NOTE_G, NOTE_F, NOTE_E,
+		NOTE_D, NOTE_C, NOTE_C, NOTE_D, NOTE_E, NOTE_E, NOTE_D, NOTE_D };
 
 	for (int i = 0; i < 15; i++)
 	{
-		int tm = i >= 13 ? 250 : 500;
+		int tm = 500;
 		if (i == 12) tm = 700;
+		else if (i == 13 || i == 14) tm = 250;
 		tone(pinPiezo, tones[i], tm);
 		delay(tm);
 		wdt_reset();
 	}
-
-	digitalWrite(9, HIGH);
 }
 
 void loop()
 {
 	readerProcess();
 
+	// process incoming UDP datagrams
 	int packetSize = udp.parsePacket();
-	// if (udp.available())
 	if (packetSize)
 	{
 		if (packetSize == 3)
 		{
 			char msgBuf[3];
 			udp.read(msgBuf, 3);
-			if (udpResponseTimeout)
+			if (udpResponseTimeout) // if we are waiting for any response packet
 			{
 				if (strncmp(msgBuf, ">CO", 3) == 0)
-				{
-					authAccepted();
-				}
+					cardAccepted();
 				else if (strncmp(msgBuf, ">CB", 3) == 0)
-				{
-					authRejected();
-				}
+					cardRejected();
 			}
 		}
 		else
 		{
-			while (packetSize--)
-			{
-				udp.read();
-			}
+			while (packetSize--) // just flush (I don't know if this is needed,
+				udp.read();        // Arduino docs doesn't say anything about unprocessed packets)
 		}
 	}
 
+	// decrementing timeouts every 1ms
 	static unsigned long lastMs = 0;
-	if (millis() != lastMs) // done every 1ms
+	if (millis() != lastMs)
 	{
 		lastMs = millis();
 
@@ -244,9 +187,7 @@ void loop()
 		{
 			lockTransitionTimeTimeout--;
 			if (lockTransitionTimeTimeout == 0)
-			{
 				servo.detach();
-			}
 		}
 
 		if (udpResponseTimeout)
@@ -257,6 +198,7 @@ void loop()
 	}
 #endif
 
+	// processing button events
 	static unsigned long buttonEvent = 0;
 	bool button = digitalRead(pinButtonSwitch);
 	if (button != previousButtonState)
@@ -267,6 +209,7 @@ void loop()
 		{
 			if (time > 200)
 			{
+				// sending notification with button press time
 				udp.beginPacket(srvIp, 10000);
 				char buf[10];
 				sprintf(buf, "%%%05d", time);
@@ -282,6 +225,7 @@ void loop()
 		previousButtonState = button;
 	}
 
+	// processing reed switch events
 	static unsigned long reedEvent = 0;
 	bool door = digitalRead(pinReedSwitch);
 	if (previousDoorState != door)
@@ -299,6 +243,7 @@ void loop()
 
 		if (time > 20)
 		{
+			// sending notification about door state
 			udp.beginPacket(srvIp, 10000);
 			char buf[10];
 			sprintf(buf, "^%d|%06ld", door == close ? 0 : 1, time);
@@ -334,23 +279,27 @@ void serialEvent(){
 
 void onReaderNewCard()
 {
+	// compute card checksum
 	uint8_t cardChk = 0;
 	for (int i = 0; i < LENGTH; i++)
 		cardChk ^= readerCardNumber[i];
 
+	// if there is no previous card, store its checksum and wait for next number
 	if (lastCardChkTimeout == 0)
 	{
 		lastCardChk = cardChk;
 		lastCardChkTimeout = 500;
 	}
-	else
+	else // it's second number, check its checksum with previous
 	{
 		if (cardChk == lastCardChk)
 		{
+			// if two consecutive cards numbers are equal try to authorize card locally and
+			// if it is not in local database, send authorization request to server
 			lastCardChkTimeout = 0;
-			if (auth_checkLocal())
+			if (authCheckLocal())
 			{
-				authAccepted();
+				cardAccepted();
 
 				udp.beginPacket(srvIp, 10000);
 				udp.write("!");
@@ -374,7 +323,9 @@ void onReaderNewCard()
 			return true;
 		else
 		{
+			// if we have another card, store its number hoping next will be the same
 			lastCardChk = cardChk;
+			lastCardChkTimeout = 500;
 		}
 	}
 #endif
@@ -389,12 +340,9 @@ inline void dumpCardToSerial(){
 // doors
 void servoDo(int angle)
 {
-	// return;
 	servo.attach(pinServo);
 	servo.write(angle);
 	lockTransitionTimeTimeout = lockTransitionTime;
-	// delay(lockTransitionTime);
-	// servo.detach();
 }
 void unlockDoor()
 {
@@ -411,7 +359,7 @@ void lockDoor()
 	isDoorLocked = true;
 }
 
-void authAccepted()
+void cardAccepted()
 {
 	if (soundDelayTimeout == 0)
 	{
@@ -420,11 +368,10 @@ void authAccepted()
 		toneEnabled = 1;
 		soundDelayTimeout = 500;
 	}
-	authReportOpened();
 	if (isDoorLocked)
 		unlockDoor();
 }
-void authRejected()
+void cardRejected()
 {
 	if (soundDelayTimeout == 0)
 	{
