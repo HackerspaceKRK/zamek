@@ -152,7 +152,7 @@ void loop()
 		{
 			char msgBuf[3];
 			udp.read(msgBuf, 3);
-			if (udpResponseTimeout) // if we are waiting for any response packet
+			if (udpResponseTimeout) // process only if we are waiting for any response packet
 			{
 				if (strncmp(msgBuf, ">CO", 3) == 0)
 					cardAccepted();
@@ -212,8 +212,8 @@ void loop()
 				// sending notification with button press time
 				udp.beginPacket(srvIp, 10000);
 				char buf[10];
-				sprintf(buf, "%%%05d", time);
-				udp.write(buf);
+				int len = snprintf(buf, 10, "%%%05d", time);
+				udp.write((uint8_t*)buf, len);
 				udp.endPacket();
 
 				if (isDoorLocked)
@@ -246,8 +246,8 @@ void loop()
 			// sending notification about door state
 			udp.beginPacket(srvIp, 10000);
 			char buf[10];
-			sprintf(buf, "^%d|%06ld", door == close ? 0 : 1, time);
-			udp.write(buf);
+			int len = snprintf(buf, 10, "^%d|%06ld", door == close ? 0 : 1, time);
+			udp.write((uint8_t*)buf, len);
 			udp.endPacket();
 		}
 
@@ -303,14 +303,14 @@ void onReaderNewCard()
 
 				udp.beginPacket(srvIp, 10000);
 				udp.write("!");
-				udp.write((const uint8_t*)readerCardNumber, LENGTH);
+				udp.write((uint8_t*)readerCardNumber, LENGTH);
 				udp.endPacket();
 			}
 			else
 			{
 				udp.beginPacket(srvIp, 10000);
 				udp.write("@");
-				udp.write((const uint8_t*)readerCardNumber, LENGTH);
+				udp.write((uint8_t*)readerCardNumber, LENGTH);
 				udp.endPacket();
 				udpResponseTimeout = 1000;
 			}
