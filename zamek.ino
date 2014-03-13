@@ -129,7 +129,7 @@ void playSong()
 	int tones[] = { NOTE_E, NOTE_E, NOTE_F, NOTE_G, NOTE_G, NOTE_F, NOTE_E,
 		NOTE_D, NOTE_C, NOTE_C, NOTE_D, NOTE_E, NOTE_E, NOTE_D, NOTE_D };
 
-	for (int i = 0; i < 15; i++)
+	for (uint8_t i = 0; i < 15; i++)
 	{
 		int tm = 500;
 		if (i == 12) tm = 700;
@@ -259,24 +259,6 @@ inline int bufferIndex(int index){
 	return index%(BUFSIZE);
 }
 
-//called by Arduino framework when there are available bytes in input buffer
-void serialEvent(){
-        digitalWrite(8, HIGH);
-	while (Serial.available())
-        {
-                char temp = Serial.read();
-                if(cyclicBufferPosition < 10){
-		  buffer[cyclicBufferPosition++] = temp;
-                }else{
-                  Serial.flush();
-                }
-		
-	}
-	lastSerialEventTime = millis();
-        eventReceived = true;
-        digitalWrite(8, LOW);
-}
-
 void onReaderNewCard()
 {
 	// compute card checksum
@@ -290,11 +272,11 @@ void onReaderNewCard()
 		lastCardChk = cardChk;
 		lastCardChkTimeout = 500;
 	}
-	else // it's second number, check its checksum with previous
+	else // it's second number, check its checksum with previous one
 	{
 		if (cardChk == lastCardChk)
 		{
-			// if two consecutive cards numbers are equal try to authorize card locally and
+			// if two consecutive card numbers are equal try to authorize card locally and
 			// if it is not in local database, send authorization request to server
 			lastCardChkTimeout = 0;
 			if (authCheckLocal())
@@ -328,13 +310,6 @@ void onReaderNewCard()
 			lastCardChkTimeout = 500;
 		}
 	}
-#endif
-
-inline void dumpCardToSerial(){
-	Serial.write("Copy from buffer: ");
-	for (int i = 0; i < LENGTH; ++i)
-		Serial.write(card[i]);
-	Serial.write(";\n");
 }
 
 // doors
