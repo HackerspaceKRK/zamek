@@ -16,18 +16,17 @@ limitations under the License.
 
  */
 #include <Servo.h> 
+#include <Ethernet.h> 
 #include <SPI.h>
-#include <Ethernet.h>
 #include <avr/wdt.h>
 
 #include "config.h"
 
 #include "reader.h"
 #include "auth.h"
+#include "lock.h"
 
-Servo servo;
 EthernetUDP udp;
-bool isDoorLocked = true; //assumed state of door lock on uC power on
 
 const bool open = true;
 const bool close = false;
@@ -42,8 +41,6 @@ int doorEvent = 0;
 
 int soundDelayTimeout = 0;
 
-int lockTransitionTimeTimeout = 0;
-int doorServerRevertTimeout = 0;
 
 int udpResponseTimeout = 0;
 
@@ -56,6 +53,7 @@ void unlockDoor();
 void unlockDoorForce();
 void cardAccepted();
 void cardRejected();
+void udpSendPacket(const char* data, int len = -1);
 
 void setup()
 {
@@ -65,12 +63,15 @@ void setup()
 	digitalWrite(9, LOW);
 
 	readerInit();
+	lockInit();
 
 	// enable internal pull-ups
 	digitalWrite(pinButtonSwitch, HIGH);
 	digitalWrite(pinReedSwitch, HIGH);
 
-	Ethernet.begin(mac, ip);
+	uint8_t macTmp[6];
+	memcpy(macTmp, mac, 6);
+	Ethernet.begin(macTmp, ip);
 	udp.begin(10000);
 
 	// playing song in order to properly... boot the device
@@ -114,6 +115,7 @@ void playSong()
 void loop()
 {
 	readerProcess();
+	lockProcess();
 
 	// process incoming UDP datagrams
 	int packetSize = udp.parsePacket();
@@ -149,15 +151,7 @@ void loop()
 		if (soundDelayTimeout)
 			soundDelayTimeout--;
 
-		if (lockTransitionTimeTimeout)
-		{
-			lockTransitionTimeTimeout--;
-			if (lockTransitionTimeTimeout == 0)
-				servo.detach();
-		}
-
-		if (doorServerRevertTimeout)
-			doorServerRevertTimeout--;
+		lockEvent1MS();
 
 		if (udpResponseTimeout)
 			udpResponseTimeout--;
@@ -173,9 +167,7 @@ void loop()
 			if (lastPingTimeout == 0)
 			{
 				lastPingTimeout = 2000;
-				udp.beginPacket(srvIp, 10000);
-				udp.write("*");
-				udp.endPacket();
+				udpSendPacket("*");
 			}
 		}
 	}
@@ -197,11 +189,9 @@ void loop()
 			else if (time > 200)
 			{
 				// sending notification with button press time
-				udp.beginPacket(srvIp, 10000);
 				char buf[10];
 				int len = snprintf(buf, 10, "%%%05d", time);
-				udp.write((uint8_t*)buf, len);
-				udp.endPacket();
+				udpSendPacket(buf, len);
 
 				if (isDoorLocked)
 					unlockDoor();
@@ -228,11 +218,9 @@ void loop()
 	{
 		reedToDebounce = false;
 		// sending notification about door state
-		udp.beginPacket(srvIp, 10000);
 		char buf[12];
 		int len = snprintf(buf, 12, "^%d|%08ld", door == close ? 0 : 1, time);
-		udp.write((uint8_t*)buf, len);
-		udp.endPacket();
+		udpSendPacket(buf, len);
 
 		if (door == close)
 		{
@@ -242,12 +230,9 @@ void loop()
 		{
 			// when door are opened during locking time, unlock door, but only
 			// within specific time since locking started
-			if (isDoorLocked && doorServerRevertTimeout)
+			if (isDoorLocked)
 			{
-				int timeLeft = lockTransitionTime - lockTransitionTimeTimeout;
-				servoDo(servoUnlockAngle);
-				lockTransitionTimeTimeout = timeLeft;
-				isDoorLocked = false;
+				lockRevert();
 			}
 		}
 	}
@@ -275,23 +260,19 @@ void onReaderNewCard()
 			// if two consecutive card numbers are equal try to authorize card locally and
 			// if it is not in local database, send authorization request to server
 			lastCardChkTimeout = 0;
+			char buf[1 + LENGTH];
+			memcpy(buf + 1, readerCardNumber, LENGTH);
 			if (authCheckLocal())
 			{
 				cardAccepted();
-
-				udp.beginPacket(srvIp, 10000);
-				udp.write("!");
-				udp.write((uint8_t*)readerCardNumber, LENGTH);
-				udp.endPacket();
+				buf[0] = '!';
 			}
 			else
 			{
-				udp.beginPacket(srvIp, 10000);
-				udp.write("@");
-				udp.write((uint8_t*)readerCardNumber, LENGTH);
-				udp.endPacket();
 				udpResponseTimeout = 1000;
+				buf[0] = '@';
 			}
+			udpSendPacket(buf, sizeof(buf));
 		}
 		else
 		{
@@ -300,40 +281,6 @@ void onReaderNewCard()
 			lastCardChkTimeout = 500;
 		}
 	}
-}
-
-// doors
-void servoDo(int angle)
-{
-	servo.attach(pinServo);
-	servo.write(angle);
-	lockTransitionTimeTimeout = lockTransitionTime;
-}
-void servoDoTime(int angle, int time)
-{
-	servo.attach(pinServo);
-	servo.write(angle);
-	lockTransitionTimeTimeout = time;
-}
-void unlockDoor()
-{
-	if (!isDoorLocked)
-		return;
-	servoDo(servoUnlockAngle);
-	isDoorLocked = false;
-}
-void unlockDoorForce()
-{
-	servoDo(servoUnlockAngle);
-	isDoorLocked = false;
-}
-void lockDoor()
-{
-	if (isDoorLocked)
-		return;
-	servoDo(servoLockAngle);
-	isDoorLocked = true;
-	doorServerRevertTimeout = 3000;
 }
 
 void cardAccepted()
@@ -353,4 +300,14 @@ void cardRejected()
 		tone(pinPiezo, toneRejected, toneDuration);
 		soundDelayTimeout = 500;
 	}
+}
+
+void udpSendPacket(const char* data, int len)
+{
+	udp.beginPacket(srvIp, 10000);
+	if (len == -1)
+		udp.write(data);
+	else
+		udp.write((uint8_t*)data, len);
+	udp.endPacket();
 }

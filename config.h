@@ -1,6 +1,9 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
+#include <Arduino.h>
+#include <IPAddress.h>
+
 //RFID card number length in ASCII-encoded hexes
 #define LENGTH 10
 
@@ -22,10 +25,10 @@ const int servoUnlockAngle = 180;
 
 const int timeBetweenFrames = 50;
 
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xDD, 0xFE, 0xED };
-char server[] = "192.168.100.5";
-IPAddress ip(192,168,100,9);
-IPAddress srvIp(192,168,100,5);
+const uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xDD, 0xFE, 0xED };
+const char server[] = "192.168.100.5";
+const IPAddress ip(192,168,100,9);
+const IPAddress srvIp(192,168,100,5);
 
 // HARDWARE
 
