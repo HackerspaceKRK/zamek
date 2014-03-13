@@ -65,13 +65,8 @@ void setup()
 	pinMode(9, OUTPUT);
 	digitalWrite(9, LOW);
 
-#ifdef STASZEK_MODE
-	// RFID reader we are actualy using, implemented according to the UNIQUE standard
-	Serial.begin(57600);
-#else
-	// RFID reader bought from chinese guys; it is violating every single standard
-	Serial.begin(9600);
-#endif
+	readerInit();
+
 	// enable internal pull-ups
 	digitalWrite(pinButtonSwitch, HIGH);
 	digitalWrite(pinReedSwitch, HIGH);

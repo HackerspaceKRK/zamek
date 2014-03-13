@@ -19,11 +19,17 @@ unsigned long reader_lastReceiveTime;
 char readerCardNumber[BUFSIZE];
 
 // private functions
+void reader_enable();
+void reader_disable();
 bool reader_isBufferValid();
 
 // public functions
 extern void onReaderNewCard();
 
+void readerInit()
+{
+	reader_enable();
+}
 void readerProcess()
 {
 	// clear buffer if we are in the middle of gap between two frames and we have some data (n<LENGTH) in the buffer
@@ -41,15 +47,30 @@ void serialEvent()
 		readerCardNumber[reader_bufferIdx++] = Serial.read();
 		if (reader_bufferIdx == LENGTH)
 		{
-			Serial.end(); // disabling communicaion to prevent internal buffer filling
+			reader_disable(); // disabling communicaion to prevent internal buffer filling
 			if (reader_isBufferValid())
 				onReaderNewCard();
-			Serial.begin(57600);
+			reader_enable();
 			Serial.flush();
 			reader_bufferIdx = 0;
 		}
 	}
 	reader_lastReceiveTime = millis();
+}
+
+void reader_enable()
+{
+#ifdef STASZEK_MODE
+	// RFID reader we are actualy using, implemented according to the UNIQUE standard
+	Serial.begin(57600);
+#else
+	// RFID reader bought from chinese guys; it is violating every single standard
+	Serial.begin(9600);
+#endif
+}
+void reader_disable()
+{
+	Serial.end();
 }
 
 #ifdef STASZEK_MODE
