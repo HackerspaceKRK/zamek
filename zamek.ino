@@ -40,9 +40,6 @@ const bool released = true;
 
 int doorEvent = 0;
 
-int toneDisableTimeout;
-int toneEnabled = 0;
-
 int soundDelayTimeout = 0;
 
 int lockTransitionTimeTimeout = 0;
@@ -54,7 +51,7 @@ uint8_t lastCardChk = 0;
 void playSong();
 void lockDoor();
 void unlockDoor();
-void dumpCardToSerial();
+void unlockDoorForce();
 void cardAccepted();
 void cardRejected();
 
@@ -134,8 +131,10 @@ void loop()
 		}
 		else
 		{
-			while (packetSize--) // just flush (I don't know if this is needed,
-				udp.read();        // Arduino docs doesn't say anything about unprocessed packets)
+			// just flush (I don't know if this is needed,
+			// Arduino docs doesn't say anything about unprocessed packets)
+			while (packetSize--)
+				udp.read();
 		}
 	}
 
@@ -144,13 +143,6 @@ void loop()
 	if (millis() != lastMs)
 	{
 		lastMs = millis();
-
-		if (toneDisableTimeout)
-		{
-			toneDisableTimeout--;
-			if (toneDisableTimeout == 0)
-				noTone(pinPiezo);
-		}
 
 		if (soundDelayTimeout)
 			soundDelayTimeout--;
@@ -178,7 +170,12 @@ void loop()
 
 		if (button == released)
 		{
-			if (time > 200)
+			// force door unlock in case of staying in wrong state
+			if (time > 20000)
+			{
+				unlockDoorForce();
+			}
+			else if (time > 200)
 			{
 				// sending notification with button press time
 				udp.beginPacket(srvIp, 10000);
@@ -290,6 +287,11 @@ void unlockDoor()
 	servoDo(clockwise);
 	isDoorLocked = false;
 }
+void unlockDoorForce()
+{
+	servoDo(clockwise);
+	isDoorLocked = false;
+}
 void lockDoor()
 {
 	if (isDoorLocked)
@@ -302,9 +304,7 @@ void cardAccepted()
 {
 	if (soundDelayTimeout == 0)
 	{
-		tone(pinPiezo, toneAccepted);
-		toneDisableTimeout = toneDuration;
-		toneEnabled = 1;
+		tone(pinPiezo, toneAccepted, toneDuration);
 		soundDelayTimeout = 500;
 	}
 	if (isDoorLocked)
@@ -314,9 +314,7 @@ void cardRejected()
 {
 	if (soundDelayTimeout == 0)
 	{
-		tone(pinPiezo, toneRejected);
-		toneDisableTimeout = toneDuration;
-		toneEnabled = 1;
+		tone(pinPiezo, toneRejected, toneDuration);
 		soundDelayTimeout = 500;
 	}
 }
