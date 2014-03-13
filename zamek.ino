@@ -83,6 +83,15 @@ void setup()
 
 void playSong()
 {
+#ifdef SILENT
+	tone(pinPiezo, toneAccepted, 100);
+	for (uint8_t i = 0; i < 15; i++)
+	{
+		delay(500);
+		wdt_reset();
+	}
+	tone(pinPiezo, toneAccepted, 100);
+#else
 #define NOTE_E 329
 #define NOTE_F 349
 #define NOTE_G 392
@@ -100,6 +109,7 @@ void playSong()
 		delay(tm);
 		wdt_reset();
 	}
+#endif
 }
 
 void loop()

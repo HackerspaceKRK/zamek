@@ -6,6 +6,7 @@
 
 #define STASZEK_MODE
 //#define DEBUG
+#define SILENT
 
 const int toneAccepted = 1260; //Hz
 const int toneRejected = 440;  //Hz
