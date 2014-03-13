@@ -19,7 +19,7 @@ limitations under the License.
 #include <SPI.h>
 #include <Ethernet.h>
 #include <avr/wdt.h>
-#include <RestClient.h>
+// #include <RestClient.h>
 
 #include "config.h"
 
@@ -38,16 +38,18 @@ const bool close = false;
 const bool pressed = false;
 const bool released = true;
 
-int buttonEvent = 0;
 int doorEvent = 0;
 
-int toneDisableTime;
+int toneDisableTimeout;
 int toneEnabled = 0;
 
-int delayTime = 0;
+int soundDelayTimeout = 0;
 
 int lockTransitionTimeTimeout = 0;
 int udpResponseTimeout = 0;
+
+int lastCardChkTimeout = 0;
+uint8_t lastCardChk = 0;
 
 void lockDoor();
 void unlockDoor();
@@ -58,16 +60,16 @@ inline bool isStable(const int lastEvent)
 	return millis() - lastEvent > debounceDelay;
 }
 
-
 void authAccepted();
 void authRejected();
-
 
 EthernetUDP udp;
 void setup()
 {
-	wdt_enable(WDTO_4S);
+	wdt_enable(WDTO_2S);
 
+	pinMode(9, OUTPUT);
+	digitalWrite(9, LOW);
 
 #ifdef STASZEK_MODE
 	// RFID reader we are actualy using, implemented according to the UNIQUE standard
@@ -83,16 +85,47 @@ void setup()
 	Ethernet.begin(mac, ip);
 	udp.begin(10000);
 
-	pinMode(9, OUTPUT);
-	digitalWrite(9, LOW);
+#define NOTE_E (329)
+#define NOTE_F (349)
+#define NOTE_G (392)
+#define NOTE_D (293)
+#define NOTE_C (261)
+	int tones[] = {
+		NOTE_E,
+		NOTE_E,
+		NOTE_F,
+		NOTE_G,
+		NOTE_G,
+		NOTE_F,
+		NOTE_E,
+		NOTE_D,
+		NOTE_C,
+		NOTE_C,
+		NOTE_D,
+		NOTE_E,
+		NOTE_E,
+		NOTE_D,
+		NOTE_D,
+	};
+
+	for (int i = 0; i < 15; i++)
+	{
+		int tm = i >= 13 ? 250 : 500;
+		if (i == 12) tm = 700;
+		tone(pinPiezo, tones[i], tm);
+		delay(tm);
+		wdt_reset();
+	}
+
+	digitalWrite(9, HIGH);
 }
 
 void loop()
 {
 	readerProcess();
 
-  int packetSize = udp.parsePacket();
-  // if (udp.available())
+	int packetSize = udp.parsePacket();
+	// if (udp.available())
 	if (packetSize)
 	{
 		if (packetSize == 3)
@@ -105,7 +138,7 @@ void loop()
 				{
 					authAccepted();
 				}
-				if (strncmp(msgBuf, ">CB", 3) == 0)
+				else if (strncmp(msgBuf, ">CB", 3) == 0)
 				{
 					authRejected();
 				}
@@ -125,15 +158,15 @@ void loop()
 	{
 		lastMs = millis();
 
-		if (toneDisableTime)
+		if (toneDisableTimeout)
 		{
-			toneDisableTime--;
-			if (toneDisableTime == 0)
+			toneDisableTimeout--;
+			if (toneDisableTimeout == 0)
 				noTone(pinPiezo);
 		}
 
-		if (delayTime)
-			delayTime--;
+		if (soundDelayTimeout)
+			soundDelayTimeout--;
 
 		if (lockTransitionTimeTimeout)
 		{
@@ -146,26 +179,63 @@ void loop()
 
 		if (udpResponseTimeout)
 			udpResponseTimeout--;
+
+		if (lastCardChkTimeout)
+			lastCardChkTimeout--;
 	}
 
+	static unsigned long buttonEvent = 0;
 	bool button = digitalRead(pinButtonSwitch);
 	if (button != previousButtonState)
 	{
-		buttonEvent = millis();
-	}
-	if (isStable(buttonEvent) and button == pressed)
-	{
-		if (isDoorLocked)
-		{
-			unlockDoor();
-		}
-	}
-	previousButtonState = button;
+		unsigned long time = millis() - buttonEvent;
 
+		if (button == released)
+		{
+			if (time > 200)
+			{
+				udp.beginPacket(srvIp, 10000);
+				char buf[10];
+				sprintf(buf, "%%%05d", time);
+				udp.write(buf);
+				udp.endPacket();
+
+				if (isDoorLocked)
+					unlockDoor();
+			}
+		}
+
+		buttonEvent = millis();
+		previousButtonState = button;
+	}
+
+	static unsigned long reedEvent = 0;
 	bool door = digitalRead(pinReedSwitch);
-	if (previousDoorState == open and door == close)
-		lockDoor();
-	previousDoorState = door;
+	if (previousDoorState != door)
+	{
+		unsigned long time = millis() - reedEvent;
+
+		if (door == close)
+		{
+			lockDoor();
+		}
+		if (door == open)
+		{
+			isDoorLocked = false;
+		}
+
+		if (time > 20)
+		{
+			udp.beginPacket(srvIp, 10000);
+			char buf[10];
+			sprintf(buf, "^%d|%06ld", door == close ? 0 : 1, time);
+			udp.write(buf);
+			udp.endPacket();
+		}
+
+		reedEvent = millis();
+		previousDoorState = door;
+	}
 
 	wdt_reset();
 }
@@ -179,28 +249,43 @@ void dump()
 }
 #endif
 
-int lastNumberChk = 0;
-
 void onReaderNewCard()
 {
+	uint8_t cardChk = 0;
+	for (int i = 0; i < LENGTH; i++)
+		cardChk ^= readerCardNumber[i];
 
+	if (lastCardChkTimeout == 0)
 	{
-		// dumpCardToSerial();
-#ifdef DEBUG
-		Serial.print("VALID\n");
-#endif
-		if (auth_checkLocal())
+		lastCardChk = cardChk;
+		lastCardChkTimeout = 500;
+	}
+	else
+	{
+		if (cardChk == lastCardChk)
 		{
-			authAccepted();
+			lastCardChkTimeout = 0;
+			if (auth_checkLocal())
+			{
+				authAccepted();
+
+				udp.beginPacket(srvIp, 10000);
+				udp.write("!");
+				udp.write((const uint8_t*)readerCardNumber, LENGTH);
+				udp.endPacket();
+			}
+			else
+			{
+				udp.beginPacket(srvIp, 10000);
+				udp.write("@");
+				udp.write((const uint8_t*)readerCardNumber, LENGTH);
+				udp.endPacket();
+				udpResponseTimeout = 1000;
+			}
 		}
 		else
 		{
-			udp.beginPacket(srvIp, 10000);
-			udp.write("@");
-			udp.write((const uint8_t*)readerCardNumber, LENGTH);
-			udp.write("\n");
-			udp.endPacket();
-			udpResponseTimeout = 1000;
+			lastCardChk = cardChk;
 		}
 	}
 }
@@ -224,23 +309,27 @@ void servoDo(int angle)
 }
 void unlockDoor()
 {
+	if (!isDoorLocked)
+		return;
 	servoDo(clockwise);
 	isDoorLocked = false;
 }
 void lockDoor()
 {
+	if (isDoorLocked)
+		return;
 	servoDo(counterClockwise);
 	isDoorLocked = true;
 }
 
 void authAccepted()
 {
-	if (delayTime == 0)
+	if (soundDelayTimeout == 0)
 	{
 		tone(pinPiezo, toneAccepted);
-		toneDisableTime = toneDuration;
+		toneDisableTimeout = toneDuration;
 		toneEnabled = 1;
-		delayTime = 500;
+		soundDelayTimeout = 500;
 	}
 	authReportOpened();
 	if (isDoorLocked)
@@ -248,11 +337,11 @@ void authAccepted()
 }
 void authRejected()
 {
-	if (delayTime == 0)
+	if (soundDelayTimeout == 0)
 	{
 		tone(pinPiezo, toneRejected);
-		toneDisableTime = toneDuration;
+		toneDisableTimeout = toneDuration;
 		toneEnabled = 1;
-		delayTime = 500;
+		soundDelayTimeout = 500;
 	}
 }
