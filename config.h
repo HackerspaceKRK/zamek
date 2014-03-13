@@ -17,8 +17,8 @@ const int lockTransitionTime = 2000 - 300; // in milliseconds
 const int debounceDelay = 50; // milliseconds 
 const int remoteDelay = 2000;
 
-const int counterClockwise = 0;
-const int clockwise = 180;
+const int servoLockAngle = 0;
+const int servoUnlockAngle = 180;
 
 const int timeBetweenFrames = 50;
 
