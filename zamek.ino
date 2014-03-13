@@ -159,6 +159,20 @@ void loop()
 
 		if (lastCardChkTimeout)
 			lastCardChkTimeout--;
+
+		// ping server
+		static unsigned long lastPingTimeout = 2000;
+		if (lastPingTimeout)
+		{
+			lastPingTimeout--;
+			if (lastPingTimeout == 0)
+			{
+				lastPingTimeout = 2000;
+				udp.beginPacket(srvIp, 10000);
+				udp.write("*");
+				udp.endPacket();
+			}
+		}
 	}
 
 	// processing button events
@@ -213,8 +227,8 @@ void loop()
 		{
 			// sending notification about door state
 			udp.beginPacket(srvIp, 10000);
-			char buf[10];
-			int len = snprintf(buf, 10, "^%d|%06ld", door == close ? 0 : 1, time);
+			char buf[12];
+			int len = snprintf(buf, 12, "^%d|%08ld", door == close ? 0 : 1, time);
 			udp.write((uint8_t*)buf, len);
 			udp.endPacket();
 		}
