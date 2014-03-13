@@ -96,7 +96,7 @@ void playSong()
 	int tones[] = { NOTE_E, NOTE_E, NOTE_F, NOTE_G, NOTE_G, NOTE_F, NOTE_E,
 		NOTE_D, NOTE_C, NOTE_C, NOTE_D, NOTE_E, NOTE_E, NOTE_D, NOTE_D };
 
-	for (int i = 0; i < 15; i++)
+	for (uint8_t i = 0; i < 15; i++)
 	{
 		int tm = 500;
 		if (i == 12) tm = 700;
@@ -224,15 +224,6 @@ void loop()
 	wdt_reset();
 }
 
-#ifdef DEBUG
-void dump()
-{
-	for (int i = 1; i <= BUFSIZE; ++i)
-		Serial.print(buffer[bufferIndex(cyclicBufferPosition+i)]);
-	Serial.print("\n");
-}
-#endif
-
 void onReaderNewCard()
 {
 	// compute card checksum
@@ -246,11 +237,11 @@ void onReaderNewCard()
 		lastCardChk = cardChk;
 		lastCardChkTimeout = 500;
 	}
-	else // it's second number, check its checksum with previous
+	else // it's second number, check its checksum with previous one
 	{
 		if (cardChk == lastCardChk)
 		{
-			// if two consecutive cards numbers are equal try to authorize card locally and
+			// if two consecutive card numbers are equal try to authorize card locally and
 			// if it is not in local database, send authorization request to server
 			lastCardChkTimeout = 0;
 			if (authCheckLocal())
@@ -278,13 +269,6 @@ void onReaderNewCard()
 			lastCardChkTimeout = 500;
 		}
 	}
-}
-inline void dumpCardToSerial()
-{
-	Serial.write("Copy from buffer: ");
-	for (int i = 0; i < LENGTH; ++i)
-		Serial.write(readerCardNumber[i]);
-	Serial.write(";\n");
 }
 
 // doors

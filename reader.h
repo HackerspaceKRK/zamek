@@ -26,7 +26,8 @@ extern void onReaderNewCard();
 
 void readerProcess()
 {
-	if (reader_bufferIdx > 0 && (millis() - reader_lastReceiveTime) >= timeBetweenFrames * 2 / 5)
+	// clear buffer if we are in the middle of gap between two frames and we have some data (n<LENGTH) in the buffer
+	if (reader_bufferIdx > 0 && millis() - reader_lastReceiveTime >= timeBetweenFrames * 2 / 5)
 	{
 		reader_bufferIdx = 0;
 	}
