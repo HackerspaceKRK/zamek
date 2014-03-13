@@ -40,8 +40,7 @@ void serialEvent()
 		readerCardNumber[reader_bufferIdx++] = Serial.read();
 		if (reader_bufferIdx == LENGTH)
 		{
-			// digitalWrite(9, HIGH);
-			Serial.end();
+			Serial.end(); // disabling communicaion to prevent internal buffer filling
 			if (reader_isBufferValid())
 				onReaderNewCard();
 			Serial.begin(57600);
@@ -50,7 +49,6 @@ void serialEvent()
 		}
 	}
 	reader_lastReceiveTime = millis();
-	// digitalWrite(9, LOW);
 }
 
 #ifdef STASZEK_MODE
