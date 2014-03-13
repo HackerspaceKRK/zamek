@@ -71,6 +71,8 @@ int doorEvent = 0;
 int soundDelayTimeout = 0;
 
 int lockTransitionTimeTimeout = 0;
+int doorServerRevertTimeout = 0;
+
 int udpResponseTimeout = 0;
 
 int lastCardChkTimeout = 0;
@@ -182,6 +184,9 @@ void loop()
 				servo.detach();
 		}
 
+		if (doorServerRevertTimeout)
+			doorServerRevertTimeout--;
+
 		if (udpResponseTimeout)
 			udpResponseTimeout--;
 
@@ -238,10 +243,25 @@ void loop()
 
 	// processing reed switch events
 	static unsigned long reedEvent = 0;
+	static bool reedToDebounce = false;
 	bool door = digitalRead(pinReedSwitch);
 	if (previousDoorState != door)
 	{
-		unsigned long time = millis() - reedEvent;
+		reedEvent = millis();
+		previousDoorState = door;
+		reedToDebounce = true;
+	}
+
+	unsigned long time = millis() - reedEvent;
+	if (reedToDebounce && time > 200)
+	{
+		reedToDebounce = false;
+		// sending notification about door state
+		udp.beginPacket(srvIp, 10000);
+		char buf[12];
+		int len = snprintf(buf, 12, "^%d|%08ld", door == close ? 0 : 1, time);
+		udp.write((uint8_t*)buf, len);
+		udp.endPacket();
 
 		if (door == close)
 		{
@@ -249,21 +269,16 @@ void loop()
 		}
 		if (door == open)
 		{
-			isDoorLocked = false;
+			// when door are opened during locking time, unlock door, but only
+			// within specific time since locking started
+			if (isDoorLocked && doorServerRevertTimeout)
+			{
+				int timeLeft = lockTransitionTime - lockTransitionTimeTimeout;
+				servoDo(servoUnlockAngle);
+				lockTransitionTimeTimeout = timeLeft;
+				isDoorLocked = false;
+			}
 		}
-
-		if (time > 20)
-		{
-			// sending notification about door state
-			udp.beginPacket(srvIp, 10000);
-			char buf[12];
-			int len = snprintf(buf, 12, "^%d|%08ld", door == close ? 0 : 1, time);
-			udp.write((uint8_t*)buf, len);
-			udp.endPacket();
-		}
-
-		reedEvent = millis();
-		previousDoorState = door;
 	}
 
 inline int bufferIndex(int index){
@@ -330,24 +345,31 @@ void servoDo(int angle)
 	servo.write(angle);
 	lockTransitionTimeTimeout = lockTransitionTime;
 }
+void servoDoTime(int angle, int time)
+{
+	servo.attach(pinServo);
+	servo.write(angle);
+	lockTransitionTimeTimeout = time;
+}
 void unlockDoor()
 {
 	if (!isDoorLocked)
 		return;
-	servoDo(clockwise);
+	servoDo(servoUnlockAngle);
 	isDoorLocked = false;
 }
 void unlockDoorForce()
 {
-	servoDo(clockwise);
+	servoDo(servoUnlockAngle);
 	isDoorLocked = false;
 }
 void lockDoor()
 {
 	if (isDoorLocked)
 		return;
-	servoDo(counterClockwise);
+	servoDo(servoLockAngle);
 	isDoorLocked = true;
+	doorServerRevertTimeout = 3000;
 }
 
 void cardAccepted()
