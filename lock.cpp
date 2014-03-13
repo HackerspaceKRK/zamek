@@ -7,16 +7,17 @@
 Servo servo;
 
 bool isDoorLocked = true; //assumed state of door lock on uC power on
+int doorServerRevertTimeout = 0;
 
 int lockTransitionTimeTimeout = 0;
-int doorServerRevertTimeout = 0;
+
+void servoDoTime(int angle, int time);
 
 void lockInit()
 {
 }
 void lockProcess()
 {
-
 }
 void lockEvent1MS()
 {
@@ -31,12 +32,6 @@ void lockEvent1MS()
 		doorServerRevertTimeout--;
 }
 
-void servoDo(int angle)
-{
-	servo.attach(pinServo);
-	servo.write(angle);
-	lockTransitionTimeTimeout = lockTransitionTime;
-}
 void servoDoTime(int angle, int time)
 {
 	servo.attach(pinServo);
@@ -47,29 +42,39 @@ void unlockDoor()
 {
 	if (!isDoorLocked)
 		return;
-	servoDo(servoUnlockAngle);
-	isDoorLocked = false;
-}
-void unlockDoorForce()
-{
-	servoDo(servoUnlockAngle);
+
+	int timeLeft = lockTransitionTime;
+
+	// if within locking process, calculate time to revert process
+	if (lockTransitionTimeTimeout)
+		timeLeft = lockTransitionTime - lockTransitionTimeTimeout;
+
+	servoDoTime(servoUnlockAngle, timeLeft);
 	isDoorLocked = false;
 }
 void lockDoor()
 {
 	if (isDoorLocked)
 		return;
-	servoDo(servoLockAngle);
+
+	int timeLeft = lockTransitionTime;
+
+	// if within unlocking process, calculate time to revert process
+	if (lockTransitionTimeTimeout)
+		timeLeft = lockTransitionTime - lockTransitionTimeTimeout + 200;
+
+	servoDoTime(servoLockAngle, timeLeft);
 	isDoorLocked = true;
 	doorServerRevertTimeout = 3000;
 }
-void lockRevert()
+
+void lockDoorForce()
 {
-	if (doorServerRevertTimeout)
-	{
-		int timeLeft = lockTransitionTime - lockTransitionTimeTimeout;
-		servoDo(servoUnlockAngle);
-		lockTransitionTimeTimeout = timeLeft;
-		isDoorLocked = false;
-	}
+	servoDoTime(servoLockAngle, lockTransitionTime);
+	isDoorLocked = true;
+}
+void unlockDoorForce()
+{
+	servoDoTime(servoUnlockAngle, lockTransitionTime);
+	isDoorLocked = false;
 }

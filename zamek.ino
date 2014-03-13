@@ -182,9 +182,12 @@ void loop()
 		if (button == released)
 		{
 			// force door unlock in case of staying in wrong state
-			if (time > 20000)
+			if (time > 15000)
 			{
-				unlockDoorForce();
+				if (isDoorLocked)
+					lockDoorForce();
+				else
+					unlockDoorForce();
 			}
 			else if (time > 200)
 			{
@@ -195,11 +198,21 @@ void loop()
 
 				if (isDoorLocked)
 					unlockDoor();
+				else if (previousDoorState == close)
+					lockDoor();
 			}
 		}
 
 		buttonEvent = millis();
 		previousButtonState = button;
+	}
+	if (button == pressed)
+	{
+		unsigned long t = millis() - buttonEvent;
+		if (t >= 15000 && t <= 15100)
+			tone(pinPiezo, toneAccepted * 2, 100);
+		else if (t >= 5000 && t <= 5100)
+			tone(pinPiezo, toneAccepted * 2, 100);
 	}
 
 	// processing reed switch events
@@ -230,9 +243,9 @@ void loop()
 		{
 			// when door are opened during locking time, unlock door, but only
 			// within specific time since locking started
-			if (isDoorLocked)
+			if (isDoorLocked && doorServerRevertTimeout)
 			{
-				lockRevert();
+				unlockDoor();
 			}
 		}
 	}
