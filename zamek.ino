@@ -58,7 +58,7 @@ const int toneDuration = 100;  //microseconds
 
 const int lockTransitionTime = 2000; // in microseconds
 
-const int debounceDelay = 50; // miliseconds 
+const int debounceDelay = 200; // miliseconds 
 const int remoteDelay = 2000;
 
 bool isDoorLocked = true; //assumed state of door lock on uC power on
@@ -183,7 +183,7 @@ inline void cleanBuffer(){
 }
 
 #ifdef STASZEK_MODE
-	const int offset = 3;
+	const int offset = 0;
 #else
 	const int offset = 1;
 #endif
