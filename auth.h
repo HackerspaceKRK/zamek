@@ -6,7 +6,6 @@
 // private variables
 
 // private functions
-bool auth_checkRemote();
 bool auth_checkLocal();
 bool auth_compareToStoredCard(int i);
 

@@ -45,4 +45,5 @@ const int pinPiezo = 6;
 const int pinButtonSwitch = 2;
 const int pinReedSwitch = 3;
 
+const int tamperProtectionSwitch = 10;
 #endif
