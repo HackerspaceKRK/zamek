@@ -24,7 +24,10 @@
 
 #include "reader.h"
 #include "auth.h"
+
 #include "lock.h"
+
+#include "tamperProtection.h"
 
 EthernetUDP udp;
 
@@ -64,6 +67,7 @@ void setup()
 
 	readerInit();
 	lockInit();
+        tamperProtectionInit();
 
 	// enable internal pull-ups
 	digitalWrite(pinButtonSwitch, HIGH);
@@ -94,6 +98,7 @@ void playSong()
 
 void loop()
 {
+        tamperProtectionProcess();
 	readerProcess();
 	lockProcess();
 
