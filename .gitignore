@@ -2,3 +2,4 @@ karty.h
 *~
 build-*/
 cards.h
+config.h
