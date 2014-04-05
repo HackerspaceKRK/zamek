@@ -83,7 +83,6 @@ void setup()
 
 void playSong()
 {
-#ifdef SILENT
 	tone(pinPiezo, toneAccepted, 100);
 	for (uint8_t i = 0; i < 15; i++)
 	{
@@ -91,25 +90,6 @@ void playSong()
 		wdt_reset();
 	}
 	tone(pinPiezo, toneAccepted, 100);
-#else
-#define NOTE_E 329
-#define NOTE_F 349
-#define NOTE_G 392
-#define NOTE_D 293
-#define NOTE_C 261
-	int tones[] = { NOTE_E, NOTE_E, NOTE_F, NOTE_G, NOTE_G, NOTE_F, NOTE_E,
-		NOTE_D, NOTE_C, NOTE_C, NOTE_D, NOTE_E, NOTE_E, NOTE_D, NOTE_D };
-
-	for (uint8_t i = 0; i < 15; i++)
-	{
-		int tm = 500;
-		if (i == 12) tm = 700;
-		else if (i == 13 || i == 14) tm = 250;
-		tone(pinPiezo, tones[i], tm);
-		delay(tm);
-		wdt_reset();
-	}
-#endif
 }
 
 void loop()
