@@ -50,7 +50,7 @@ int udpResponseTimeout = 0;
 int lastCardChkTimeout = 0;
 uint8_t lastCardChk = 0;
 
-void playSong();
+void bootDelay();
 void lockDoor();
 void unlockDoor();
 void unlockDoorForce();
@@ -78,14 +78,14 @@ void setup()
 	Ethernet.begin(macTmp, ip);
 	udp.begin(10000);
 
-	// playing song in order to properly... boot the device
+	// delaying in order to properly boot the device
 	// we really need this time (about 7-10 secs)
-	playSong();
+	bootDelay();
 
 	digitalWrite(9, HIGH);
 }
 
-void playSong()
+void bootDelay()
 {
 	tone(pinPiezo, toneAccepted, 100);
 	for (uint8_t i = 0; i < 15; i++)
@@ -175,7 +175,7 @@ void loop()
 				else
 					unlockDoorForce();
 			}
-			else if (time > 200)
+			else if (time > debounceDelay)
 			{
 				// sending notification with button press time
 				char buf[10];
@@ -213,7 +213,7 @@ void loop()
 	}
 
 	unsigned long time = millis() - reedEvent;
-	if (reedToDebounce && time > 200)
+	if (reedToDebounce && time > debounceDelay)
 	{
 		reedToDebounce = false;
 		// sending notification about door state
