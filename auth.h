@@ -6,8 +6,8 @@
 // private variables
 
 // private functions
-bool auth_checkLocal();
-bool auth_compareToStoredCard(int i);
+static bool auth_checkLocal();
+static bool auth_compareToStoredCard(int i);
 
 // public functions
 bool authCheckLocal()
@@ -19,7 +19,7 @@ bool authCheckLocal()
 }
 
 // private implementation
-bool auth_compareToStoredCard(int i)
+static bool auth_compareToStoredCard(int i)
 {
 	char* addr = (char*)pgm_read_word(cards + i);
 	return strncmp_P(readerCardNumber, addr, LENGTH) == 0;
