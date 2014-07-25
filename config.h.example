@@ -4,19 +4,19 @@
 #include <Arduino.h>
 #include <IPAddress.h>
 
-//RFID card number length in ASCII-encoded hexes
+// RFID card number length in ASCII-encoded hexes
 #define LENGTH 10
 
 #define STASZEK_MODE
-//#define DEBUG
+// #define DEBUG
 
-const int toneAccepted = 1260; //Hz
-const int toneRejected = 440;  //Hz
+const int toneAccepted = 1260; // in Hz
+const int toneRejected = 440;  // in Hz
 const int toneDuration = 100;  // milliseconds 
 
 const int lockTransitionTime = 2000 - 300; // in milliseconds
 
-const unsigned int debounceDelay = 50; // milliseconds 
+const unsigned int debounceDelay = 50; // in milliseconds
 
 const int servoLockAngle = 0;
 const int servoUnlockAngle = 180;

@@ -226,8 +226,9 @@ void loop()
 		if (door == open)
 		{
 			// when door are opened during locking time, unlock door, but only
-			// within specific time since locking started
-			if (isDoorLocked && doorServerRevertTimeout)
+			// within specific time since locking started (to prevent from opening
+			// due to reed problems)
+			if (isDoorLocked && doorRevertTimeout)
 			{
 				unlockDoor();
 			}

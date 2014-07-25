@@ -2,7 +2,7 @@
 #define __LOCK_H__
 
 extern bool isDoorLocked;
-extern int doorServerRevertTimeout;
+extern int doorRevertTimeout;
 
 void lockEventTick();
 

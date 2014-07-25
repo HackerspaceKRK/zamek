@@ -7,7 +7,7 @@
 Servo servo;
 
 bool isDoorLocked = true; //assumed state of door lock on uC power on
-int doorServerRevertTimeout = 0;
+int doorRevertTimeout = 0;
 
 int lockTransitionTimeTimeout = 0;
 
@@ -22,8 +22,8 @@ void lockEventTick()
 			servo.detach();
 	}
 
-	if (doorServerRevertTimeout)
-		doorServerRevertTimeout--;
+	if (doorRevertTimeout)
+		doorRevertTimeout--;
 }
 
 void servoDoTime(int angle, int time)
@@ -59,7 +59,9 @@ void lockDoor()
 
 	servoDoTime(servoLockAngle, timeLeft);
 	isDoorLocked = true;
-	doorServerRevertTimeout = 3000;
+	// we can start revert process only within 3 seconds since lock started,
+	// this protects from opening doors in case of reed switch problems
+	doorRevertTimeout = 3000;
 }
 
 void lockDoorForce()
