@@ -179,7 +179,7 @@ void loop()
 			{
 				// sending notification with button press time
 				char buf[10];
-				int len = snprintf(buf, 10, "%%%05d", time);
+				int len = snprintf(buf, 10, "%%%05lu", time);
 				udpSendPacket(buf, len);
 
 				if (isDoorLocked)
@@ -310,7 +310,7 @@ void cardRejected()
 
 void udpSendPacket(const char* data, int len)
 {
-	udp.beginPacket(srvIp, 10000);
+	udp.beginPacket(serverIp, 10000);
 	if (len == -1)
 		udp.write(data);
 	else

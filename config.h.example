@@ -16,8 +16,7 @@ const int toneDuration = 100;  // milliseconds
 
 const int lockTransitionTime = 2000 - 300; // in milliseconds
 
-const int debounceDelay = 50; // milliseconds 
-const int remoteDelay = 2000;
+const unsigned int debounceDelay = 50; // milliseconds 
 
 const int servoLockAngle = 0;
 const int servoUnlockAngle = 180;
@@ -27,7 +26,7 @@ const int timeBetweenFrames = 50;
 
 const uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xDD, 0xFE, 0xED };
 const IPAddress ip(192,168,100,9);
-const IPAddress srvIp(192,168,100,5);
+const IPAddress serverIp(192,168,100,5);
 
 // HARDWARE
 

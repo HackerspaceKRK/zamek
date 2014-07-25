@@ -32,7 +32,7 @@ void readerInit()
 }
 void readerProcess()
 {
-	// clear buffer if we are in the middle of gap between two frames and we have some data (n<LENGTH) in the buffer
+	// clear buffer if we are in the middle of gap between two frames and we have some data (n > 0 and n < LENGTH) in the buffer
 	if (reader_bufferIdx > 0 && millis() - reader_lastReceiveTime >= timeBetweenFrames * 2 / 5)
 	{
 		reader_bufferIdx = 0;
