@@ -13,13 +13,7 @@ int lockTransitionTimeTimeout = 0;
 
 void servoDoTime(int angle, int time);
 
-void lockInit()
-{
-}
-void lockProcess()
-{
-}
-void lockEvent1MS()
+void lockEventTick()
 {
 	if (lockTransitionTimeTimeout)
 	{

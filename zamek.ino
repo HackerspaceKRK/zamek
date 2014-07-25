@@ -66,8 +66,7 @@ void setup()
 	digitalWrite(9, LOW);
 
 	readerInit();
-	lockInit();
-        tamperProtectionInit();
+	tamperProtectionInit();
 
 	// enable internal pull-ups
 	digitalWrite(pinButtonSwitch, HIGH);
@@ -98,9 +97,8 @@ void bootDelay()
 
 void loop()
 {
-        tamperProtectionProcess();
+	tamperProtectionProcess();
 	readerProcess();
-	lockProcess();
 
 	// process incoming UDP datagrams
 	int packetSize = udp.parsePacket();
@@ -136,7 +134,7 @@ void loop()
 		if (soundDelayTimeout)
 			soundDelayTimeout--;
 
-		lockEvent1MS();
+		lockEventTick();
 
 		if (udpResponseTimeout)
 			udpResponseTimeout--;

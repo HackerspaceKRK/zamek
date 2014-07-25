@@ -4,9 +4,7 @@
 extern bool isDoorLocked;
 extern int doorServerRevertTimeout;
 
-void lockInit();
-void lockProcess();
-void lockEvent1MS();
+void lockEventTick();
 
 void unlockDoorForce();
 void lockDoorForce();
