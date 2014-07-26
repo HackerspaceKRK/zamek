@@ -154,7 +154,6 @@ void loop()
 			}
 		}
 	}
-#endif
 
 	// processing button events
 	static unsigned long buttonEvent = 0;
@@ -235,8 +234,7 @@ void loop()
 		}
 	}
 
-inline int bufferIndex(int index){
-	return index%(BUFSIZE);
+	wdt_reset();
 }
 
 void onReaderNewCard()
@@ -273,12 +271,6 @@ void onReaderNewCard()
 			}
 			udpSendPacket(buf, sizeof(buf));
 		}
-		return true;
-	}
-#else
-	inline bool isBufferValid(int cyclicBufferPosition){
-		if(buffer[bufferIndex(cyclicBufferPosition+1)] == '0' && buffer[bufferIndex(cyclicBufferPosition+2)] == 'x')
-			return true;
 		else
 		{
 			// if we have another card, store its number hoping next will be the same
