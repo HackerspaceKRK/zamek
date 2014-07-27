@@ -232,7 +232,7 @@ void onReaderNewCard()
 
 void cardAccepted()
 {
-	if (soundDelayTimeout == 0)
+	if (!soundDelayTimeout)
 	{
 		tone(pinPiezo, toneAccepted, toneDuration);
 		soundDelayTimeout = 500;
@@ -242,7 +242,7 @@ void cardAccepted()
 }
 void cardRejected()
 {
-	if (soundDelayTimeout == 0)
+	if (!soundDelayTimeout)
 	{
 		tone(pinPiezo, toneRejected, toneDuration);
 		soundDelayTimeout = 500;
