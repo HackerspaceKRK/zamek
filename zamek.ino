@@ -56,6 +56,7 @@ void unlockDoor();
 void unlockDoorForce();
 void cardAccepted();
 void cardRejected();
+static void processIncomingDatagrams();
 void udpSendPacket(const char* data, int len = -1);
 
 void setup()
@@ -71,30 +72,7 @@ void loop()
 	tamperProtectionProcess();
 	readerProcess();
 
-	// process incoming UDP datagrams
-	int packetSize = udp.parsePacket();
-	if (packetSize)
-	{
-		if (packetSize == 3)
-		{
-			char msgBuf[3];
-			udp.read(msgBuf, 3);
-			if (udpResponseTimeout) // process only if we are waiting for any response packet
-			{
-				if (strncmp(msgBuf, ">CO", 3) == 0)
-					cardAccepted();
-				else if (strncmp(msgBuf, ">CB", 3) == 0)
-					cardRejected();
-			}
-		}
-		else
-		{
-			// just flush (I don't know if this is needed,
-			// Arduino docs doesn't say anything about unprocessed packets)
-			while (packetSize--)
-				udp.read();
-		}
-	}
+	processIncomingDatagrams();
 
 	// decrementing timeouts every 1ms
 	static unsigned long lastMs = 0;
@@ -208,6 +186,7 @@ void loop()
 	wdt_reset();
 }
 
+
 void onReaderNewCard()
 {
 	// compute card checksum
@@ -270,6 +249,32 @@ void cardRejected()
 	}
 }
 
+void processIncomingDatagrams()
+{
+	int packetSize = udp.parsePacket();
+	if (packetSize)
+	{
+		if (packetSize == 3)
+		{
+			char msgBuf[3];
+			udp.read(msgBuf, 3);
+			if (udpResponseTimeout) // process only if we are waiting for any response packet
+			{
+				if (strncmp(msgBuf, ">CO", 3) == 0)
+					cardAccepted();
+				else if (strncmp(msgBuf, ">CB", 3) == 0)
+					cardRejected();
+			}
+		}
+		else
+		{
+			// just flush (I don't know if this is needed,
+			// Arduino docs doesn't say anything about unprocessed packets)
+			while (packetSize--)
+				udp.read();
+		}
+	}
+}
 void udpSendPacket(const char* data, int len)
 {
 	udp.beginPacket(serverIp, 10000);
