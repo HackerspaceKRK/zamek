@@ -48,6 +48,7 @@ When using Arduino, connect:
 - D3:	 reed switch; second side to ground
 - D5:	 servo (the yellow cable...)
 - D6:	 piezo/speaker; second side to ground
+- D9:  LED
 - D10: tamper
 */
 
@@ -56,6 +57,8 @@ const int pinReedSwitch = 3;
 
 const int pinServo = 5;
 const int pinPiezo = 6;
+
+const int pinLed = 9;
 
 const int tamperProtectionSwitch = 10;
 #endif

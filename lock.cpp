@@ -1,6 +1,5 @@
 #include "lock.h"
 
-
 #include "config.h"
 #include <Servo.h> 
 

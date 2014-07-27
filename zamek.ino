@@ -23,6 +23,7 @@
 #include "config.h"
 
 #include "reader.h"
+#include "hardware.h"
 #include "auth.h"
 
 #include "lock.h"
@@ -40,11 +41,9 @@ const bool BUTTON_RELEASED = true;
 bool previousDoorState = DOOR_CLOSED;
 bool previousButtonState = true;
 
-
 int doorEvent = 0;
 
 int soundDelayTimeout = 0;
-
 
 int udpResponseTimeout = 0;
 
@@ -61,39 +60,10 @@ void udpSendPacket(const char* data, int len = -1);
 
 void setup()
 {
-	wdt_enable(WDTO_2S);
-
-	pinMode(9, OUTPUT);
-	digitalWrite(9, LOW);
+	hardwareInit();
 
 	readerInit();
 	tamperProtectionInit();
-
-	// enable internal pull-ups
-	digitalWrite(pinButtonSwitch, HIGH);
-	digitalWrite(pinReedSwitch, HIGH);
-
-	uint8_t macTmp[6];
-	memcpy(macTmp, mac, 6);
-	Ethernet.begin(macTmp, ip);
-	udp.begin(10000);
-
-	// delaying in order to properly boot the device
-	// we really need this time (about 7-10 secs)
-	bootDelay();
-
-	digitalWrite(9, HIGH);
-}
-
-void bootDelay()
-{
-	tone(pinPiezo, toneAccepted, 100);
-	for (uint8_t i = 0; i < 15; i++)
-	{
-		delay(500);
-		wdt_reset();
-	}
-	tone(pinPiezo, toneAccepted, 100);
 }
 
 void loop()
