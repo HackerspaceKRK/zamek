@@ -43,11 +43,11 @@ bool previousButtonState = true;
 
 int doorEvent = 0;
 
-int soundDelayTimeout = 0;
+int soundDelayCounter = 0;
 
-int udpResponseTimeout = 0;
+int udpResponseCounter = 0;
 
-int lastCardChkTimeout = 0;
+int lastCardChkCounter = 0;
 uint8_t lastCardChk = 0;
 
 void bootDelay();
@@ -74,31 +74,31 @@ void loop()
 
 	processIncomingDatagrams();
 
-	// decrementing timeouts every 1ms
+	// decrementing counters every 1ms
 	static unsigned long lastMs = 0;
 	if (millis() != lastMs)
 	{
 		lastMs = millis();
 
-		if (soundDelayTimeout)
-			soundDelayTimeout--;
+		if (soundDelayCounter)
+			soundDelayCounter--;
 
 		lockEventTick();
 
-		if (udpResponseTimeout)
-			udpResponseTimeout--;
+		if (udpResponseCounter)
+			udpResponseCounter--;
 
-		if (lastCardChkTimeout)
-			lastCardChkTimeout--;
+		if (lastCardChkCounter)
+			lastCardChkCounter--;
 
 		// ping server
-		static unsigned long lastPingTimeout = 2000;
-		if (lastPingTimeout)
+		static unsigned long lastPingCounter = 2000;
+		if (lastPingCounter)
 		{
-			lastPingTimeout--;
-			if (lastPingTimeout == 0)
+			lastPingCounter--;
+			if (lastPingCounter == 0)
 			{
-				lastPingTimeout = 2000;
+				lastPingCounter = 2000;
 				udpSendPacket("*");
 			}
 		}
@@ -177,7 +177,7 @@ void loop()
 			// when door are opened during locking time, unlock them, but only
 			// within specific time since locking started (to prevent from opening
 			// due to reed switch problems)
-			if (isDoorLocked && doorRevertTimeout)
+			if (isDoorLocked && doorRevertCounter)
 			{
 				unlockDoor();
 			}
@@ -196,10 +196,10 @@ void onReaderNewCard()
 		cardChk ^= readerCardNumber[i];
 
 	// if there is no previous card, store its checksum and wait for next number
-	if (lastCardChkTimeout == 0)
+	if (lastCardChkCounter == 0)
 	{
 		lastCardChk = cardChk;
-		lastCardChkTimeout = 500;
+		lastCardChkCounter = 500;
 	}
 	else // it's second number, check its checksum with previous one
 	{
@@ -207,7 +207,7 @@ void onReaderNewCard()
 		{
 			// if two consecutive card numbers are equal try to authorize card locally and
 			// if it is not in local database, send authorization request to server
-			lastCardChkTimeout = 0;
+			lastCardChkCounter = 0;
 			char buf[1 + LENGTH];
 			memcpy(buf + 1, readerCardNumber, LENGTH);
 			if (authCheckLocal())
@@ -217,7 +217,7 @@ void onReaderNewCard()
 			}
 			else
 			{
-				udpResponseTimeout = 1000;
+				udpResponseCounter = 1000;
 				buf[0] = '@';
 			}
 			udpSendPacket(buf, sizeof(buf));
@@ -226,27 +226,27 @@ void onReaderNewCard()
 		{
 			// if we have another card, store its number hoping next will be the same
 			lastCardChk = cardChk;
-			lastCardChkTimeout = 500;
+			lastCardChkCounter = 500;
 		}
 	}
 }
 
 void cardAccepted()
 {
-	if (!soundDelayTimeout)
+	if (!soundDelayCounter)
 	{
 		tone(pinPiezo, toneAccepted, toneDuration);
-		soundDelayTimeout = 500;
+		soundDelayCounter = 500;
 	}
 	if (isDoorLocked)
 		unlockDoor();
 }
 void cardRejected()
 {
-	if (!soundDelayTimeout)
+	if (!soundDelayCounter)
 	{
 		tone(pinPiezo, toneRejected, toneDuration);
-		soundDelayTimeout = 500;
+		soundDelayCounter = 500;
 	}
 }
 
@@ -259,7 +259,7 @@ void processIncomingDatagrams()
 		{
 			char msgBuf[3];
 			udp.read(msgBuf, 3);
-			if (udpResponseTimeout) // process only if we are waiting for any response packet
+			if (udpResponseCounter) // process only if we are waiting for any response packet
 			{
 				if (strncmp(msgBuf, ">CO", 3) == 0)
 					cardAccepted();

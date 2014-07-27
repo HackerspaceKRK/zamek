@@ -25,7 +25,7 @@ const int lockTransitionDriftTime = 200;
 
 // We can start revert process only within some time since lock started,
 // this protects from opening doors in case of reed switch problems
-const int doorRevertTime = 3000;
+const int doorRevertTimeout = 3000;
 
 const unsigned int debounceDelay = 200; // in milliseconds
 
