@@ -125,7 +125,7 @@ void loop()
 			{
 				// sending notification with button press time
 				char buf[10];
-				int len = snprintf(buf, 10, "%%%05lu", time);
+				int len = snprintf(buf, sizeof(buf), "%%%05lu", time);
 				udpSendPacket(buf, len);
 
 				if (isDoorLocked)
@@ -164,7 +164,8 @@ void loop()
 		reedToDebounce = false;
 		// sending notification about door state
 		char buf[12];
-		int len = snprintf(buf, 12, "^%d|%08ld", door == DOOR_CLOSED ? 0 : 1, time);
+		int doorState = door == DOOR_CLOSED ? 0 : 1;
+		int len = snprintf(buf, sizeof(buf), "^%d|%08ld", doorState, time);
 		udpSendPacket(buf, len);
 
 		if (door == DOOR_CLOSED)
@@ -173,9 +174,9 @@ void loop()
 		}
 		if (door == DOOR_OPENED)
 		{
-			// when door are opened during locking time, unlock door, but only
+			// when door are opened during locking time, unlock them, but only
 			// within specific time since locking started (to prevent from opening
-			// due to reed problems)
+			// due to reed switch problems)
 			if (isDoorLocked && doorRevertTimeout)
 			{
 				unlockDoor();
