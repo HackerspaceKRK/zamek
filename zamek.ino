@@ -114,7 +114,7 @@ void loop()
 		if (button == BUTTON_RELEASED)
 		{
 			// force door unlock in case of staying in wrong state
-			if (time > 15000)
+			if (time > forceDoorUnlockPressTime)
 			{
 				if (isDoorLocked)
 					lockDoorForce();
@@ -141,9 +141,9 @@ void loop()
 	if (button == BUTTON_PRESSED)
 	{
 		unsigned long t = millis() - buttonEvent;
-		if (t >= 15000 && t <= 15100)
+		if (t >= forceDoorUnlockPressTime && t <= forceDoorUnlockPressTime + 100)
 			tone(pinPiezo, toneAccepted * 2, 100);
-		else if (t >= 5000 && t <= 5100)
+		else if (t >= customActionPressTime && t <= customActionPressTime + 100)
 			tone(pinPiezo, toneAccepted * 2, 100);
 	}
 

@@ -29,6 +29,9 @@ const int doorRevertTime = 3000;
 
 const unsigned int debounceDelay = 200; // in milliseconds
 
+const int forceDoorUnlockPressTime = 15000; // in milliseconds
+const int customActionPressTime = 5000; // in milliseconds
+
 const int servoLockAngle = 0;
 const int servoUnlockAngle = 180;
 
