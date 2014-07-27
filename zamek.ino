@@ -31,14 +31,15 @@
 
 EthernetUDP udp;
 
-const bool open = true;
-const bool close = false;
+const bool DOOR_OPENED = true;
+const bool DOOR_CLOSED = false;
 
-bool previousDoorState = close;
+const bool BUTTON_PRESSED = false;
+const bool BUTTON_RELEASED = true;
+
+bool previousDoorState = DOOR_CLOSED;
 bool previousButtonState = true;
 
-const bool pressed = false;
-const bool released = true;
 
 int doorEvent = 0;
 
@@ -162,7 +163,7 @@ void loop()
 	{
 		unsigned long time = millis() - buttonEvent;
 
-		if (button == released)
+		if (button == BUTTON_RELEASED)
 		{
 			// force door unlock in case of staying in wrong state
 			if (time > 15000)
@@ -181,7 +182,7 @@ void loop()
 
 				if (isDoorLocked)
 					unlockDoor();
-				else if (previousDoorState == close)
+				else if (previousDoorState == DOOR_CLOSED)
 					lockDoor();
 			}
 		}
@@ -189,7 +190,7 @@ void loop()
 		buttonEvent = millis();
 		previousButtonState = button;
 	}
-	if (button == pressed)
+	if (button == BUTTON_PRESSED)
 	{
 		unsigned long t = millis() - buttonEvent;
 		if (t >= 15000 && t <= 15100)
@@ -215,14 +216,14 @@ void loop()
 		reedToDebounce = false;
 		// sending notification about door state
 		char buf[12];
-		int len = snprintf(buf, 12, "^%d|%08ld", door == close ? 0 : 1, time);
+		int len = snprintf(buf, 12, "^%d|%08ld", door == DOOR_CLOSED ? 0 : 1, time);
 		udpSendPacket(buf, len);
 
-		if (door == close)
+		if (door == DOOR_CLOSED)
 		{
 			lockDoor();
 		}
-		if (door == open)
+		if (door == DOOR_OPENED)
 		{
 			// when door are opened during locking time, unlock door, but only
 			// within specific time since locking started (to prevent from opening
