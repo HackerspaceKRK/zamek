@@ -9,7 +9,7 @@
 static bool auth_compareToStoredCard(int i);
 
 // public functions
-bool authCheckLocal()
+static bool authCheckLocal()
 {
 	for (int i = 0; i < numOfCards; ++i)
 		if (auth_compareToStoredCard(i))

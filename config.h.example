@@ -14,7 +14,18 @@ const int toneAccepted = 1260; // in Hz
 const int toneRejected = 440;  // in Hz
 const int toneDuration = 100;  // milliseconds 
 
-const int lockTransitionTime = 2000 - 300; // in milliseconds
+// time needed to perform full servo revolution
+const int lockTransitionTime = 1700; // in milliseconds
+
+// Time based opening and closing door lock is like numeric integration - 1 second
+// of unlocking and 1 second of locking doesn't mean that lock is in the initial position.
+// We add some time to locking phase to ensure there's no drift and lock is always
+// fully locked when it should be.
+const int lockTransitionDriftTime = 200;
+
+// We can start revert process only within some time since lock started,
+// this protects from opening doors in case of reed switch problems
+const int doorRevertTime = 3000;
 
 const unsigned int debounceDelay = 200; // in milliseconds
 
@@ -40,11 +51,11 @@ When using Arduino, connect:
 - D10: tamper
 */
 
-const int pinServo = 5;
-const int pinPiezo = 6;
-
 const int pinButtonSwitch = 2;
 const int pinReedSwitch = 3;
+
+const int pinServo = 5;
+const int pinPiezo = 6;
 
 const int tamperProtectionSwitch = 10;
 #endif

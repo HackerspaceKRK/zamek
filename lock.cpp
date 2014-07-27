@@ -55,19 +55,13 @@ void lockDoor()
 
 	// if within unlocking process, calculate time to revert process
 	if (lockTransitionTimeTimeout)
-	{
-		// Time based opening and closing door lock is like numeric integration - 1 second
-		// of unlocking and 1 second of locking doesn't mean that lock is in the initial position.
-		// We add some time to locking phase to ensure there's no drift and lock is always
-		// fully locked when it should be.
-		timeLeft = lockTransitionTime - lockTransitionTimeTimeout + 200;
-	}
+		timeLeft = lockTransitionTime - lockTransitionTimeTimeout + lockTransitionDriftTime;
 
 	servoDoTime(servoLockAngle, timeLeft);
 	isDoorLocked = true;
-	// we can start revert process only within 3 seconds since lock started,
+	// we can start revert process only within some time since lock started,
 	// this protects from opening doors in case of reed switch problems
-	doorRevertTimeout = 3000;
+	doorRevertTimeout = doorRevertTime;
 }
 
 void lockDoorForce()
