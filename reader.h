@@ -19,9 +19,11 @@ unsigned long reader_lastReceiveTime;
 char readerCardNumber[BUFSIZE];
 
 // private functions
-void reader_enable();
-void reader_disable();
-bool reader_isBufferValid();
+static void reader_enable();
+static void reader_disable();
+static bool reader_isBufferValid();
+static bool reader_isBufferEmpty();
+static bool reader_isInTheMiddleOfGap();
 
 // public functions
 extern void onReaderNewCard();
@@ -33,7 +35,7 @@ void readerInit()
 void readerProcess()
 {
 	// clear buffer if we are in the middle of gap between two frames and we have some data (n > 0 and n < LENGTH) in the buffer
-	if (reader_bufferIdx > 0 && millis() - reader_lastReceiveTime >= timeBetweenFrames * 2 / 5)
+	if (reader_isBufferEmpty() && reader_isInTheMiddleOfGap())
 	{
 		reader_bufferIdx = 0;
 	}
@@ -58,7 +60,7 @@ void serialEvent()
 	reader_lastReceiveTime = millis();
 }
 
-void reader_enable()
+static void reader_enable()
 {
 #ifdef STASZEK_MODE
 	// RFID reader we are actualy using, implemented according to the UNIQUE standard
@@ -68,21 +70,30 @@ void reader_enable()
 	Serial.begin(9600);
 #endif
 }
-void reader_disable()
+static void reader_disable()
 {
 	Serial.end();
 }
 
 #ifdef STASZEK_MODE
-bool reader_isBufferValid()
+static bool reader_isBufferValid()
 {
 	return true; // always valid...
 }
 #else
-bool reader_isBufferValid()
+static bool reader_isBufferValid()
 {
 	return readerCardNumber[1] == '0' && readerCardNumber[2] == 'x';
 }
 #endif
+
+static bool reader_isBufferEmpty()
+{
+	return reader_bufferIdx > 0;
+}
+static bool reader_isInTheMiddleOfGap()
+{
+	return millis() - reader_lastReceiveTime >= timeBetweenFrames * 2 / 5;
+}
 
 #endif
