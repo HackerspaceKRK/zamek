@@ -1,0 +1,67 @@
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
+
+#include <Arduino.h>
+#include <IPAddress.h>
+
+// RFID card number length in ASCII-encoded hexes
+#define LENGTH 10
+
+#define STASZEK_MODE
+// #define DEBUG
+
+const int toneAccepted = 1260; // in Hz
+const int toneRejected = 440;  // in Hz
+const int toneDuration = 100;  // milliseconds 
+
+// time needed to perform full servo revolution
+const int lockTransitionTime = 1700; // in milliseconds
+
+// Time based opening and closing door lock is like numeric integration - 1 second
+// of unlocking and 1 second of locking doesn't mean that lock is in the initial position.
+// We add some time to locking phase to ensure there's no drift and lock is always
+// fully locked when it should be.
+const int lockTransitionDriftTime = 200;
+
+// We can start revert process only within some time since lock started,
+// this protects from opening doors in case of reed switch problems
+const int doorRevertTimeout = 3000;
+
+const unsigned int debounceDelay = 200; // in milliseconds
+
+const int forceDoorUnlockPressTime = 15000; // in milliseconds
+const int customActionPressTime = 5000; // in milliseconds
+
+const int servoLockAngle = 0;
+const int servoUnlockAngle = 180;
+
+// typical time between two consecutive frames with card number
+const int timeBetweenFrames = 50;
+
+const uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xDD, 0xFE, 0xED };
+const IPAddress ip(192,168,100,9);
+const IPAddress serverIp(192,168,100,5);
+
+// HARDWARE
+
+/*
+When using Arduino, connect:
+- RX0: RFID reader TX
+- D2:	 button; second side to ground
+- D3:	 reed switch; second side to ground
+- D5:	 servo (the yellow cable...)
+- D6:	 piezo/speaker; second side to ground
+- D9:  LED
+- D10: tamper
+*/
+
+const int pinButtonSwitch = 2;
+const int pinReedSwitch = 3;
+
+const int pinServo = 5;
+const int pinPiezo = 6;
+
+const int pinLed = 9;
+
+const int tamperProtectionSwitch = 10;
+#endif

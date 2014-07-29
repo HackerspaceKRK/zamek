@@ -16,269 +16,272 @@
 
 */
 #include <Servo.h> 
+#include <Ethernet.h> 
 #include <SPI.h>
-#include <Ethernet.h>
-#include "karty.h"
-#include "ethernet.h"
 #include <avr/wdt.h>
-#include <RestClient.h>
 
-/*
-When using Arduino, connect:
-- RX0:	RFID reader TX
-- D2:	reed switch; second side to ground
-- D3:	microswitch; second side to ground
-- D9:	servo (the yellow cable...)
-- D10:	piezo/speaker; second side to ground
-*/
+#include "config.h"
 
-//RFID card number length in ASCII-encoded hexes
-#define LENGTH 10
+#include "reader.h"
+#include "hardware.h"
+#include "auth.h"
 
-#define STASZEK_MODE
-//#define DEBUG
+#include "lock.h"
 
-#ifdef STASZEK_MODE
-	//format: CardNumberCardNumber
-	#define BUFSIZE 2*LENGTH
-#else
-	//format: SN CardNumber\n
-	#define BUFSIZE 6+LENGTH
-#endif
+#include "tamperProtection.h"
 
-const int pinServo = 5;
-const int pinPiezo = 6;
+EthernetUDP udp;
 
-const int pinButtonSwitch = 2;
-const int pinReedSwitch = 3;
+const bool DOOR_OPENED = true;
+const bool DOOR_CLOSED = false;
 
-const int toneAccepted = 1260; //Hz
-const int toneRejected = 440;  //Hz
-const int toneDuration = 100;  //microseconds
+const bool BUTTON_PRESSED = false;
+const bool BUTTON_RELEASED = true;
 
-const int lockTransitionTime = 2000; // in microseconds
-
-const int debounceDelay = 200; // miliseconds 
-const int remoteDelay = 2000;
-
-bool isDoorLocked = true; //assumed state of door lock on uC power on
-
-// The config ends here. Also, here be dragons.
-
-char buffer[BUFSIZE] = {0};
-char card[LENGTH+1] = {0};
-char temp[LENGTH+1] = {0};
-Servo servo;
-
-void setup() {
-	wdt_enable(WDTO_4S);
-	#ifdef STASZEK_MODE
-		//RFID reader we are actualy using, implemented according to the UNIQUE standard
-		Serial.begin(57600);
-	#else
-		//RFID reader bought from chinese guys; it is violating every single standard
-		Serial.begin(9600);
-	#endif
-	//enable internal pull-ups
-	digitalWrite(pinButtonSwitch, HIGH);
-	digitalWrite(pinReedSwitch, HIGH);
-	Ethernet.begin(mac, ip);
-}
-
-
-bool previousDoorState = false;
+bool previousDoorState = DOOR_CLOSED;
 bool previousButtonState = true;
 
-const bool open = true;
-const bool close = false;
-
-const bool pressed = false;
-const bool released = true;
-
-int buttonEvent = 0;
 int doorEvent = 0;
 
-inline bool isStable(const int lastEvent){
-	return (millis() - lastEvent) > debounceDelay;
-}
+int soundDelayCounter = 0;
 
+int udpResponseCounter = 0;
+
+int lastCardChkCounter = 0;
+uint8_t lastCardChk = 0;
+
+void bootDelay();
 void lockDoor();
 void unlockDoor();
-bool isCardAuthorized();
-void cleanBuffer();
-void reportOpened();
-bool isBufferValid(int cyclicBufferPosition);
-void copyFromBuffer(int cyclicBufferPosition);
-void dumpCardToSerial();
+void unlockDoorForce();
+void cardAccepted();
+void cardRejected();
+static void processIncomingDatagrams();
+void udpSendPacket(const char* data, int len = -1);
 
-void loop() {
-		bool button = digitalRead(pinButtonSwitch);
-		if(button != previousButtonState){
-			buttonEvent = millis();
+void setup()
+{
+	hardwareInit();
+
+	readerInit();
+	tamperProtectionInit();
+}
+
+void loop()
+{
+	tamperProtectionProcess();
+	readerProcess();
+
+	processIncomingDatagrams();
+
+	// decrementing counters every 1ms
+	static unsigned long lastMs = 0;
+	if (millis() != lastMs)
+	{
+		lastMs = millis();
+
+		if (soundDelayCounter)
+			soundDelayCounter--;
+
+		lockEventTick();
+
+		if (udpResponseCounter)
+			udpResponseCounter--;
+
+		if (lastCardChkCounter)
+			lastCardChkCounter--;
+
+		// ping server
+		static unsigned long lastPingCounter = 2000;
+		if (lastPingCounter)
+		{
+			lastPingCounter--;
+			if (lastPingCounter == 0)
+			{
+				lastPingCounter = 2000;
+				udpSendPacket("*");
+			}
 		}
-		if(isStable(buttonEvent) and button == pressed){
-			if(isDoorLocked){
+	}
+
+	// processing button events
+	static unsigned long buttonEvent = 0;
+	bool button = digitalRead(pinButtonSwitch);
+	if (button != previousButtonState)
+	{
+		unsigned long time = millis() - buttonEvent;
+
+		if (button == BUTTON_RELEASED)
+		{
+			// force door unlock in case of staying in wrong state
+			if (time > forceDoorUnlockPressTime)
+			{
+				if (isDoorLocked)
+					lockDoorForce();
+				else
+					unlockDoorForce();
+			}
+			else if (time > debounceDelay)
+			{
+				// sending notification with button press time
+				char buf[10];
+				int len = snprintf(buf, sizeof(buf), "%%%05lu", time);
+				udpSendPacket(buf, len);
+
+				if (isDoorLocked)
+					unlockDoor();
+				else if (previousDoorState == DOOR_CLOSED)
+					lockDoor();
+			}
+		}
+
+		buttonEvent = millis();
+		previousButtonState = button;
+	}
+	if (button == BUTTON_PRESSED)
+	{
+		unsigned long t = millis() - buttonEvent;
+		if (t >= forceDoorUnlockPressTime && t <= forceDoorUnlockPressTime + 100)
+			tone(pinPiezo, toneAccepted * 2, 100);
+		else if (t >= customActionPressTime && t <= customActionPressTime + 100)
+			tone(pinPiezo, toneAccepted * 2, 100);
+	}
+
+	// processing reed switch events
+	static unsigned long reedEvent = 0;
+	static bool reedToDebounce = false;
+	bool door = digitalRead(pinReedSwitch);
+	if (previousDoorState != door)
+	{
+		reedEvent = millis();
+		previousDoorState = door;
+		reedToDebounce = true;
+	}
+
+	unsigned long time = millis() - reedEvent;
+	if (reedToDebounce && time > debounceDelay)
+	{
+		reedToDebounce = false;
+		// sending notification about door state
+		char buf[12];
+		int doorState = door == DOOR_CLOSED ? 0 : 1;
+		int len = snprintf(buf, sizeof(buf), "^%d|%08ld", doorState, time);
+		udpSendPacket(buf, len);
+
+		if (door == DOOR_CLOSED)
+		{
+			lockDoor();
+		}
+		if (door == DOOR_OPENED)
+		{
+			// when door are opened during locking time, unlock them, but only
+			// within specific time since locking started (to prevent from opening
+			// due to reed switch problems)
+			if (isDoorLocked && doorRevertCounter)
+			{
 				unlockDoor();
 			}
 		}
-		previousButtonState=button;
-
-		bool door = digitalRead(pinReedSwitch);
-		if(previousDoorState == open and door == close)
-                        lockDoor();
-		previousDoorState=door;
-
-		wdt_reset();
-}
-
-#ifdef DEBUG
-	void dump(){
-		for(int i = 1; i <= BUFSIZE; ++i)
-			Serial.print(buffer[bufferIndex(cyclicBufferPosition+i)]);
-		Serial.print("\n");
 	}
-#endif
 
-void skipSerialBuffer(){
-	while(Serial.available()){
-		Serial.read();
+	wdt_reset();
+}
+
+
+void onReaderNewCard()
+{
+	// compute card checksum
+	uint8_t cardChk = 0;
+	for (int i = 0; i < LENGTH; i++)
+		cardChk ^= readerCardNumber[i];
+
+	// if there is no previous card, store its checksum and wait for next number
+	if (lastCardChkCounter == 0)
+	{
+		lastCardChk = cardChk;
+		lastCardChkCounter = 500;
 	}
-}
- void processCardNumber(){
-	#ifdef DEBUG
-		Serial.print("VALID\n");
-	#endif
-	if(isCardAuthorized()){
-		tone(pinPiezo, toneAccepted, toneDuration);
-		unlockDoor();
-		cleanBuffer();
-		reportOpened();
-		return;
-	}else{
-		tone(pinPiezo, toneRejected, toneDuration);
-	}
-}
-
-inline int bufferIndex(int index){
-	return index%(BUFSIZE);
-}
-
-int cyclicBufferPosition = 0;
-//called by Arduino framework when there are available bytes in input buffer
-void serialEvent(){
-	while (Serial.available()) {
-		buffer[cyclicBufferPosition] = Serial.read();
-		cyclicBufferPosition = bufferIndex(cyclicBufferPosition + 1);
-		if(isDoorLocked and isBufferValid(cyclicBufferPosition)){
-			copyFromBuffer(cyclicBufferPosition);
-			dumpCardToSerial();
-			processCardNumber();
-		}	
-	}
-}
-
-inline void cleanBuffer(){
-	cyclicBufferPosition = 0;
-    memset(buffer, 0, BUFSIZE);
-}
-
-#ifdef STASZEK_MODE
-	const int offset = 0;
-#else
-	const int offset = 1;
-#endif
-inline void copyFromBuffer(int cyclicBufferPosition){
-	for(int i = 0; i < LENGTH; ++i)
-		card[i] = buffer[bufferIndex(cyclicBufferPosition + i + offset)];
-}
-
-#ifdef STASZEK_MODE
-	inline bool isBufferValid(int cyclicBufferPosition){
-		for(byte i = 1; i <= LENGTH; ++i){
-			if(buffer[bufferIndex(cyclicBufferPosition + i)] != buffer[bufferIndex(cyclicBufferPosition + i + LENGTH)])
-				return false;
+	else // it's second number, check its checksum with previous one
+	{
+		if (cardChk == lastCardChk)
+		{
+			// if two consecutive card numbers are equal try to authorize card locally and
+			// if it is not in local database, send authorization request to server
+			lastCardChkCounter = 0;
+			char buf[1 + LENGTH];
+			memcpy(buf + 1, readerCardNumber, LENGTH);
+			if (authCheckLocal())
+			{
+				cardAccepted();
+				buf[0] = '!';
+			}
+			else
+			{
+				udpResponseCounter = 1000;
+				buf[0] = '@';
+			}
+			udpSendPacket(buf, sizeof(buf));
 		}
-		return true;
-	}
-#else
-	inline bool isBufferValid(int cyclicBufferPosition){
-		if(buffer[bufferIndex(cyclicBufferPosition+1)] == '0' && buffer[bufferIndex(cyclicBufferPosition+2)] == 'x')
-			return true;
 		else
-			return false;
-	}
-#endif
-
-inline void dumpCardToSerial(){
-	Serial.write("Copy from buffer: ");
-	for (int i = 0; i < LENGTH; ++i)
-		Serial.write(card[i]);
-	Serial.write(";\n");
-}
-
-
-inline bool compareToStoredCard(int i){
-	//copy number from progmem
-	strcpy_P(temp, (char*)pgm_read_word(&(cards[i])));
-	return strcmp(temp, card) == 0;
-}
-
-RestClient client = RestClient(server, 80);
-
-void reportOpened(){
-	char data[20];
-	sprintf(data, "card=%s", card);
-	client.put("/api/v1/opened", data);
-}
-
-int remoteEvent = 0;
-bool checkRemote(){
-        if((millis() - remoteEvent) < remoteDelay)
-          return false;
-	char data[20];
-	sprintf(data, "card=%s", card);
-	int retval = client.post("/api/v1/checkCard", data);
-        remoteEvent = millis();
-	if(retval == 200){
-		return true;
-	}else{
-		return false;
+		{
+			// if we have another card, store its number hoping next will be the same
+			lastCardChk = cardChk;
+			lastCardChkCounter = 500;
+		}
 	}
 }
 
-bool checkLocal(){
-	for(int i = 0; i < numOfCards; ++i){
-        	if(compareToStoredCard(i)){
-	        	return true; 
-        	}
+void cardAccepted()
+{
+	if (!soundDelayCounter)
+	{
+		tone(pinPiezo, toneAccepted, toneDuration);
+		soundDelayCounter = 500;
 	}
-	return false;
+	if (isDoorLocked)
+		unlockDoor();
 }
-inline bool isCardAuthorized(){
-	if(checkLocal())
-		return true;
-	if(checkRemote())
-		return true;
-	return false;
-}
-
-const int counterClockwise = 0;
-const int clockwise = 180;
-
-void servoDo(int angle){
-	servo.attach(pinServo);
-	servo.write(angle);
-	delay(lockTransitionTime);
-	servo.detach();
+void cardRejected()
+{
+	if (!soundDelayCounter)
+	{
+		tone(pinPiezo, toneRejected, toneDuration);
+		soundDelayCounter = 500;
+	}
 }
 
-void unlockDoor(){
-    servoDo(clockwise);
-    isDoorLocked = false;
-
+void processIncomingDatagrams()
+{
+	int packetSize = udp.parsePacket();
+	if (packetSize)
+	{
+		if (packetSize == 3)
+		{
+			char msgBuf[3];
+			udp.read(msgBuf, 3);
+			if (udpResponseCounter) // process only if we are waiting for any response packet
+			{
+				if (strncmp(msgBuf, ">CO", 3) == 0)
+					cardAccepted();
+				else if (strncmp(msgBuf, ">CB", 3) == 0)
+					cardRejected();
+			}
+		}
+		else
+		{
+			// just flush (I don't know if this is needed,
+			// Arduino docs doesn't say anything about unprocessed packets)
+			while (packetSize--)
+				udp.read();
+		}
+	}
 }
-void lockDoor(){
-	cleanBuffer();
-	servoDo(counterClockwise);
-	isDoorLocked = true;
+void udpSendPacket(const char* data, int len)
+{
+	udp.beginPacket(serverIp, 10000);
+	if (len == -1)
+		udp.write(data);
+	else
+		udp.write((uint8_t*)data, len);
+	udp.endPacket();
 }
